@@ -1,0 +1,1298 @@
+/* =====================================================================
+   薄雾 (Mist) — 思源笔记主题
+   设计：半透明磨砂、柔和低对比；三面去框；右侧玻璃悬浮条（默认 14px
+   小把手，悬停展开为面板覆盖正文）；左侧停靠栏与目录同色无竖线。
+   作用域：全局（思源主题 CSS 全局加载，不需要 [data-light-theme] 作用域）。
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   手机端一律用思源默认外观（2026-10-30 定：放弃手机端薄雾主题）。
+   整份主题包在「精确指针 + 可悬停」的媒体查询里，等价于「只在桌面生效」：
+   手机/平板的触摸指针是 pointer:coarse + hover:none，薄雾一个字节都落不上去。
+   不用 max-width 判 —— 桌面把窗口拖窄时也应当保持薄雾，不能误判成手机。
+   手机端唯一的增强是 mist-enhancer 插件的悬浮面板，样式在插件里自成一户。
+   --------------------------------------------------------------------- */
+@media (hover: hover) and (pointer: fine) {
+
+:root {
+    /* —— 可被 settings.js 覆盖的变量 —— */
+    /* 注意：这三个底色用「实色」而不是 rgba。
+       原因：同一块区域往往有多层容器各自带背景（.layout__dockl → .sy__file →
+       .file-tree → .block__icons），半透明白每叠一层就更亮一层，于是停靠栏与
+       目录永远不同色。实色叠实色 = 同色，无论叠几层。
+       需要“透出底层背景图”时，由 settings.js 把透明度调低再换成 rgba。 */
+    --mist-side-bg: #f2f5f8;    /* 侧边栏（左停靠栏 + 目录）：浅冷灰 */
+    --mist-editor-bg: #ffffff;  /* 编辑区：纯白 */
+    --mist-dock-bg: #ffffff;    /* 右侧玻璃面板 */
+    --mist-top-bg: #ffffff;     /* 顶部工具栏（由 mist-enhancer 插件调节） */
+    --mist-bg-image: none;                        /* 底层背景图 */
+    --mist-editor-font: "";
+    --mist-editor-size: 16px;
+    --mist-tree-font: "";
+    --mist-tree-size: 14px;
+    --mist-title-size: 26px;    /* 文档标题字号，与正文字号解耦 */
+    --mist-line: #e1e3e7;       /* 顶栏下方的 1px 分割线（取自原型 --line） */
+    --mist-img-line: #c9cdd4;   /* 正文图片的 1px 细边框（0.2.28：比分割线深一档，
+                                   浅色下压在照片上也看得见；之前用 --mist-line
+                                   几乎看不见，被反馈"没实现"） */
+
+    /* —— 语义色（0.2.32 新增：暗色适配的根基）——
+       ❗0.2.31 及之前，下面这些颜色是**硬编码**在规则里的
+         （rgba(255,255,255,.45)、#3b6ef6、rgba(92,98,106,.08) …），
+         于是 `:root[data-theme-mode="dark"]` 只能改 7 个底色变量，
+         玻璃条 / 图标块 / 状态胶囊 / hover / 选中项在暗色下全是一片死白。
+         统一提到变量层后，暗色段只需要覆盖这一组值，规则本体一行不用动。 */
+    --mist-hover: rgba(0, 0, 0, 0.045);            /* 目录/图标项 hover 底 */
+    --mist-chip: rgba(92, 98, 106, 0.08);          /* 标签页 focus、工具栏 hover 底 */
+    --mist-accent: #3b6ef6;                        /* 强调蓝（选中文字/图标） */
+    --mist-accent-soft: rgba(59, 110, 246, 0.12);  /* 强调蓝的浅底 */
+    --mist-accent-line: rgba(59, 110, 246, 0.25);  /* 强调蓝的描边 */
+
+    /* 右缘玻璃条（#dockRight）：收起态 / 展开态两套 */
+    --mist-glass: rgba(255, 255, 255, 0.45);
+    --mist-glass-hover: linear-gradient(165deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.9));
+    --mist-glass-border: rgba(255, 255, 255, 0.7);
+    --mist-glass-inset: rgba(255, 255, 255, 0.9);
+    --mist-glass-shadow: rgba(31, 38, 135, 0.14);
+    --mist-glass-shadow-hover: rgba(31, 38, 135, 0.18);
+
+    /* 玻璃条里的图标块 */
+    --mist-chip-bg: rgba(255, 255, 255, 0.78);
+    --mist-chip-bg-hover: rgba(255, 255, 255, 0.95);
+    --mist-chip-line: rgba(255, 255, 255, 0.7);
+    --mist-chip-color: #6b7079;
+    --mist-chip-shadow: rgba(31, 38, 135, 0.05);
+    --mist-chip-shadow-hover: rgba(47, 128, 237, 0.2);
+
+    /* 右下角状态胶囊 */
+    --mist-status-bg: rgba(255, 255, 255, 0.72);
+    --mist-status-line: rgba(255, 255, 255, 0.75);
+    --mist-status-shadow: rgba(31, 38, 135, 0.1);
+    --mist-status-shadow-hover: rgba(31, 38, 135, 0.16);
+
+    /* 滚动条 */
+    --mist-scroll-thumb: rgba(120, 130, 145, 0.28);
+    --mist-scroll-thumb-hover: rgba(120, 130, 145, 0.45);
+
+    /* —— 去框核心：面板之间不留缝、无阴影 ——
+       注意：--b3-layout-space 是拖拽条的宽度来源，若设 0 会让命中区消失
+       （拖不动、双击复位失效）。这里保留 6px 作为兜底，实际宽度由
+       第「2.1 / 2.2」节用 10px + 负边距覆盖成「净占位 0」。 */
+    --b3-dock-shadow-color: transparent;
+    --b3-layout-space: 6px;
+    --b3-layout-space-margin: 0px;
+
+    /* —— 文字降对比（参考 Obsidian Baseline）—— */
+    --b3-theme-on-background: #5c626a;
+    --b3-theme-on-surface: #6b7079;
+    --b3-theme-on-surface-light: rgba(108, 112, 121, 0.7);
+    --b3-theme-on-surface-lighter: #b6bbc2;
+    --b3-theme-on-primary: #ffffff;
+    --b3-theme-on-error: #ffffff;
+}
+
+/* ===== 底层背景图（降低各区域透明度后可看到）===== */
+body,
+#editor {
+    /* 兜底：任何没被覆盖到的缝隙都露出「正文白」，而不是思源默认的浅灰。
+       拖拽条 opacity:0 之后露出的就是这个色，因此与正文连成一片、无可见带。 */
+    background-color: var(--mist-editor-bg) !important;
+}
+
+/* 0.2.26 修「左停靠栏 vs 目录」竖缝（用户：「应该一起调整」）：
+   ❗根因：#layouts 刷了 --mist-editor-bg。目录（.layout__dockl）在 #layouts 内部，
+     于是它实际是「侧边色 over 一层编辑区白」；而图标停靠栏 #dockLeft 是 #layouts 的
+     兄弟、直接压在背景图上，只叠一层侧边色 → 低透明度下「左边透出更多背景(偏色)、
+     右边被垫白(更白)」，中间出现一道竖缝。
+   处理：让 #layouts 透明。目录与停靠栏就都直接压在背景图上，合成结果完全一致
+     （实测 CDP 取色：34% 透明度下两侧由 [237,239,242] vs [247,249,250] 收敛到 [237,239,242] 完全相同）。
+   编辑区本身的白仍由 .layout__center 自己的 --mist-editor-bg 提供（见第三节），不受影响。 */
+#layouts {
+    background-color: transparent !important;
+}
+
+/* 0.2.27 修「未打开笔记时编辑区调不了透明度」：
+   空状态 .layout__empty（搜索/最近文档/新建文档 那个欢迎页）被原生刷了
+   实色白 rgb(255,255,255)，不引用 --mist-editor-bg → 拖「编辑区透明度」没反应。
+   改透明后它直接压在 body 的 --mist-editor-bg 上（同底），随滑块一起变。 */
+.layout__empty {
+    background: transparent !important;
+}
+
+body {
+    background-image: var(--mist-bg-image) !important;
+    background-size: cover !important;
+    background-repeat: no-repeat !important;
+    background-position: center !important;
+    background-attachment: fixed !important;
+}
+
+/* =====================================================================
+   一、去框：三段全部无边框、无阴影、无缝隙
+   ===================================================================== */
+
+/* 1) 所有停靠栏：去掉阴影/圆角/边框 */
+.layout__dockl,
+.layout__dockr,
+.layout__dockb {
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+}
+
+/* 2) 面板之间的拖拽条：视觉上彻底消失，但保留「骑在交界线」上的命中区
+
+   思源原生：.layout__dockl + .layout__resize { width: var(--b3-layout-space) }
+   → 这 6px 是**实体占位**，把目录和正文硬生生隔开，所以永远看得见一条带子。
+
+   本主题做法（0.2.0 定稿）：
+     · 宽度 6px，左右各给 -3px 负边距
+       → 净占位 = -3 + 6 - 3 = 0，两个区域真正贴在一起，不留缝；
+     · 6px 命中区正好骑在交界线上（左右各 3px），鼠标靠近就变 col-resize，
+       拖动 / 双击复位全部有效，且不会“只在一侧能抓”；
+     · 视觉清零用三重保险：opacity:0（最强，任何内层染色/边框/伪元素都看不见，
+       但 opacity 为 0 的元素**依然能接收鼠标事件**）+ background 透明 +
+       ::after/::before 全部 content:none。 */
+/* 思路分两层：
+   ① 先把拖拽条自身「涂成邻近色」——细到 6px，且与旁边同色，看不出是条子；
+   ② 再把它的子节点 / 伪元素全部清空，防止思源或插件把颜色画在内层，
+      把①涂的颜色盖掉（0.1.8 就是栽在这里）。 */
+.layout__resize,
+.layout__dockresize {
+    background: transparent !important;
+    background-image: none !important;
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+    pointer-events: auto !important;
+    opacity: 0 !important;          /* 视觉彻底不存在，但仍可命中 */
+    /* ❗0.2.15 删掉了这里的 position:relative + z-index:20。
+       实测（CDP 逐条注入定位）：只要给 .layout__dockresize 设 position:relative，
+       它就从「浮层」变成参与布局的 flex 项，把 .layout__dockl 里那一列
+       （layout-tab-container → .file-tree）的可分配高度算成 0.09px →
+       目录整块高度塌成 0，只剩空白。这就是「目录不能完整展示」。
+       拖拽条不需要定位参与，opacity:0 + 透明已经足够隐身。 */
+}
+
+/* 内层一律掏空，只留元素自身的底色 */
+.layout__resize *,
+.layout__dockresize * {
+    background: transparent !important;
+    background-image: none !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+.layout__resize::after,
+.layout__resize::before,
+.layout__resize:hover::after,
+.layout__dockresize::after,
+.layout__dockresize::before,
+.layout__dockresize:hover::after,
+.layout__dockl + .layout__resize::after,
+.layout__center + .layout__resize::after {
+    content: none !important;
+    display: none !important;
+    background: transparent !important;
+    opacity: 0 !important;
+}
+
+/* 2.1 竖向拖拽条：净占位 0，6px 命中区骑在交界线上 */
+.layout__dockl + .layout__resize,
+.layout__center + .layout__resize,
+.layout__resize--lr,
+.layout__dockresize--lr {
+    width: 6px !important;
+    /* ❗0.2.26：这里原来是 min-width:6px !important —— 正是它把「净占位 0」顶死了。
+       width:6px 保证命中区仍是 6px 宽；min-width 若不放到 0，
+       flex 布局会把这条 6px 当成实占，负 margin 只能抵消到 0，最终仍留缝。
+       4.x 的右缘图标列同理（531、692 已经是 min-width:0，可对照）。 */
+    min-width: 0 !important;
+    max-width: 6px !important;
+    margin-left: -3px !important;
+    margin-right: -3px !important;
+    cursor: col-resize !important;
+    touch-action: none !important;
+}
+
+/* 2.15 【0.2.26】清掉面板容器身上被思源原生加上的 6px 外边距
+       —— 这才是「红框2 那条缝」的真凶（实测 CDP：.layout__dockl 的
+       margin-right = 6px，.layout__dockr 的 margin-left = 6px）。
+       光靠拖拽条负 margin 抵消不掉，因为容器自身的外边距先把两块推开了 6px。
+       清掉之后，面板与正文/目录才真正「挨着」（用户原话：相邻区域应该是挨着的）。 */
+.layout__dockl { margin-right: 0 !important; }
+.layout__dockr { margin-left: 0 !important; }
+
+/* 2.15 拖拽条一律「不涂色」
+       教训：0.1.7 / 0.2.1 都试过给它涂 --mist-side-bg，结果都变成一条 6px 的
+       灰带——因为目录面板的真实色并不等于 --mist-side-bg（内层还有别的色）。
+       正确做法是让它透明，再让底下的 body 用「正文白」兜底：
+       透明后露出的是白色，与正文连成一片，缝就自然消失了。 */
+
+/* 2.2 横向拖拽条（编辑区与底部之间）同理：净占位 0，命中区骑在交界线上 */
+.layout:not(.layout__center) > .layout__resize,
+.layout__resize--tb {
+    height: 6px !important;
+    min-height: 6px !important;
+    max-height: 6px !important;
+    margin-top: -3px !important;
+    margin-bottom: -3px !important;
+    cursor: row-resize !important;
+    touch-action: none !important;
+}
+
+/* 2.3 交界处不留任何「线」：面板内层若自带 border-right / 内阴影也一并清掉
+       （防止视觉上的竖线不是拖拽条画出来的，而是某一层容器的边框）
+       注意：2.4 的分割线必须写在**本节之后** —— 同样是 .layout__dockl 的
+       border-right，后写的赢，放前面会被这里的 none 清掉。 */
+.layout__dockl,
+.layout__dockl > div,
+.layout__dockl .layout-tab-container,
+.layout__dockl .sy__file,
+.layout__dockl .file-tree,
+.layout__dockr,
+.layout__center {
+    border-right: none !important;
+    border-left: none !important;
+    box-shadow: none !important;
+}
+
+/* 2.4 目录与编辑器之间：留一条 1px 极淡竖线（0.2.19 加）
+
+   为什么需要它：拖拽条 opacity:0、两侧又都是浅色系，目录和正文在视觉上糊成
+   一整块，看不出「到哪儿为止是文档树」。这里补一条细线做区域分界。
+
+   为什么不画在 .layout__resize 上：它 opacity:0，连伪元素都跟着透明，画了也看不见。
+
+   为什么画 .layout__dockl 的右边缘，而不是 #editor 的左边：
+     · 目录收起（dockl 被 display:none）时线自动消失，不会在窗口最左边留下
+       一道悬空的竖线；
+     · 1px 正好落在两块的交界处，不参与拖拽条的 6px 命中区，不影响拖动/双击复位。
+
+   颜色取 --mist-line（浅色 #e1e3e7 / 暗色 rgba(255,255,255,.09)），与顶栏那条
+   分割线同一个值，全主题只有这一种「线」。
+
+   ❗位置有讲究（0.2.20 修正了 0.2.19 的错误）：
+     0.2.19 把声明写在这里，结果**一条线都没画出来**。原因是同一个文件里
+     清边框的不止 2.3 一处 —— 下面的 2.35「容器不上色」也有一句
+     `.layout__dockl { border: none !important }`，它排在 2.4 之后，同特异度
+     同 !important 时后写的赢，把这条 border-right 又清掉了。
+     → 声明已移到 2.36（2.35 之后）。教训：**「后写的赢」要以后一个清边框的
+     规则为基准，不是以你以为的那一个为基准**；改这类规则前先全文搜一遍
+     `border: none`，别只盯着紧邻的那一节。 */
+
+
+
+/* 3) 底部停靠栏：无框、无阴影（底部“横线”来源之一） */
+.layout__dockb,
+.layout__dockb > div {
+    background: transparent !important;
+    border: none !important;
+    border-top: none !important;
+    box-shadow: none !important;
+}
+
+/* 4) 编辑区外框 */
+.layout__center {
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+}
+
+/* =====================================================================
+   二、左侧停靠栏 + 文档树：同色浅灰半透明，融为一体、无竖线
+
+   要点：整块左侧逐层刷「同一个实色」。
+        思源左侧面板内部有多层容器（.layout__dockl → .dock/#dockLeft →
+        .layout-tab-container → .sy__file → .file-tree → .block__icons →
+        .b3-list），每层都可能带背景。若用 rgba，半透明白逐层叠加：
+        目录叠 3~4 层→接近纯白，停靠栏只叠 1~2 层→偏灰，两块永远不同色。
+        实色叠实色结果仍是同色，与层数无关 → 这才是稳妥解。
+   ===================================================================== */
+
+/* 2.1 【0.2.26 改：改单层上色，解决「停靠栏 vs 目录」色差缝】
+       老写法（0.2.4）是给目录里每一层容器都刷 --mist-side-bg。在**实色**下没问题
+       （实色叠实色仍是同色），但一旦用户把「目录+左侧停靠栏」透明度调低，
+       --mist-side-bg 变成 rgba(…,.71)，逐层叠加就会复合成近乎不透明（~0.99）：
+         · 图标停靠栏 #dockLeft 只刷 1 层 → 实际 ~0.71（能透出背景）
+         · 目录叠 3~4 层 → 实际 ~0.99（几乎不透）
+       → 两块永远差一个不透明度，中间出现一道「左边透、右边实」的缝（用户反馈的
+         「左停靠栏和目录栏应该是一起调整的」）。
+       0.2.26 处理：目录内层一律**透明**，只让外层容器 .layout__dockl 单层上色，
+       与 #dockLeft 一样只叠 1 层 → 两块不透明度完全一致，缝消失。
+       （不再需要「容器不上色」——单层上色不会有尺寸差露带的问题：
+        内层透明、显示的就是同一层 .layout__dockl 的颜色，处处同色。） */
+.layout__dockl > div,
+.layout__dockl .dock,
+.layout__dockl #dockLeft,
+.layout__dockl .sy__file,
+.layout__dockl .fn__flex,
+.layout__dockl .fn__flex-1,
+.layout__dockl .fn__flex-column,
+.layout__dockl .file-tree,
+.layout__dockl .sy__file-tree,
+.layout__dockl .block__icons,
+.layout__dockl .b3-list,
+.layout__dockl .b3-list--background,
+.layout__dockl .layout-tab,
+.layout__dockl .layout__tab,
+.layout__dockl .layout-tab-container {
+    background: transparent !important;
+    background-image: none !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* 2.2 兜底：
+       · 图标停靠栏 #dockLeft 自身刷 --mist-side-bg（它是 .layout__dockl 的兄弟，
+         不在 dockl 内部，所以必须单独上色，且只这一层 → 与目录同为单层）；
+       · 目录内的文件树各层一律透明，交由 2.35 的 .layout__dockl 单层统一上色，
+         避免叠成多层不透明（0.2.26 见 2.1 注释）。 */
+#dockLeft {
+    /* 与目录一样：单层侧边色，直接压在背景图上（#layouts 已透明，见第一节的说明）。
+       这样低透明度下两者合成结果完全一致，竖缝消失。 */
+    background-color: var(--mist-side-bg) !important;
+    background-image: none !important;
+}
+
+/* 2.2b 浮动模式兜底（.layout--float）：
+   当左侧目录以「浮层」压在编辑区之上（SiYuan 的浮动停靠栏，dockl 带 layout--float 类）时，
+   它背后多了一层编辑区白（.layout__center 的 --mist-editor-bg），会比停靠栏更白 → 又出竖缝。
+   这里仅在浮动模式下给停靠栏垫一层 --mist-editor-bg，保持同色；
+   固定（推挤）模式下 dockl 没有 layout--float 类，本规则不生效（不影响已验证的固定模式）。 */
+body:has(.layout__dockl.layout--float) #dockLeft {
+    background: linear-gradient(var(--mist-side-bg), var(--mist-side-bg)),
+                linear-gradient(var(--mist-editor-bg), var(--mist-editor-bg)) !important;
+}
+.sy__file,
+.sy__file > div,
+.sy__file-tree,
+.file-tree,
+.file-tree .block__icons,
+.file-tree .b3-list,
+.file-tree .b3-list--background {
+    background: transparent !important;
+    background-image: none !important;
+}
+
+/* 2.3 图标列与目录之间不留分隔线 */
+#dockLeft,
+.dock,
+.layout__dockl .dock__split::after {
+    border: none !important;
+    border-right: none !important;
+    box-shadow: none !important;
+}
+
+/* 2.35 【0.2.26 改：容器单层上色（恢复 0.2.4 之前的「容器上色」，但只此一层）】
+        0.2.4 当初让容器透明，是为了避开「容器比内部面板宽 → 露一条带」的问题
+        （那时变量是实色，容器色 ≠ 内层原生色，尺寸差会露带）。
+        现在（0.2.26）内层全部透明、只靠容器这一层上色，尺寸差露出的仍是
+        **同一个 --mist-side-bg**，处处同色、不再有带；同时与 #dockLeft 同为单层，
+        不透明度一致（见 2.1 的缝因分析）。 */
+.layout__dockl {
+    background-color: var(--mist-side-bg) !important;
+    background-image: none !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* 2.36 目录右边缘：1px 分割线（声明本体，说明见 2.4）
+   ❗必须放在 2.35 之后 —— 2.35 有 `border: none !important`，同特异度时后写的赢。 */
+.layout__dockl {
+    border-right: 1px solid var(--mist-line) !important;
+}
+
+/* 2.4 hover：中性浅灰（与原型 --hover: #eef0f3 对齐） */
+.layout__dockl .b3-list-item:hover,
+.layout__dockl .dock__item:hover,
+.file-tree .b3-list-item:hover {
+    background: var(--mist-hover) !important;
+}
+
+/* 2.5 文档树选中项：柔和浅蓝底 + 蓝字，去掉左侧蓝竖线 */
+.b3-list-item--focus,
+.b3-list-item--active {
+    background: var(--mist-accent-soft) !important;
+    color: var(--mist-accent) !important;
+}
+.b3-list-item--focus::before,
+.b3-list-item--active::before,
+.file-tree .b3-list-item--focus::before {
+    display: none !important;
+}
+
+/* 2.6 文档树引用计数：默认隐去，鼠标悬停该条才淡入
+   目标元素是思源 genFileHTML() 拼在 <li> 末尾的
+     <span class="popover__block counter b3-tooltips b3-tooltips__nw" aria-label="引用">N</span>
+   它永远是 li 的最后一个直接子元素（在 more / add 两个 action 之后），
+   所以用 `>` 直取，不牵连任何后代。
+
+   ❗两个关键取舍：
+     ① 用 opacity，不用 display:none。
+        display 会把宽度一起收掉，鼠标进出这一行时标题可用宽度突变，
+        省略号位置左右跳；opacity 保留占位，整行宽度恒定，进出无抖动。
+     ② 隐藏态必须 pointer-events:none。
+        `.counter` 自带 cursor:pointer 并绑了点击（打开引用面板），
+        不关掉就能在「看不见」的位置点到它，还会弹出 b3-tooltips 的
+        「引用」气泡 —— 等于藏了个隐形按钮。
+
+   作用域限定 li[data-type="navigation-file"]：`.counter` 在反链面板、
+   集市、标签页里是另外的信息（块数量、结果数等），那些数字该常驻，
+   不能跟着一起藏。 */
+.sy__file li[data-type="navigation-file"] > .counter {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
+}
+.sy__file li[data-type="navigation-file"]:hover > .counter {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* =====================================================================
+   三、编辑区：白半透明；标签栏同色、无底边线
+   ===================================================================== */
+.layout__center {
+    background: var(--mist-editor-bg) !important;
+}
+.protyle,
+.protyle-content,
+.protyle-wysiwyg,
+.protyle-title,
+.layout-tab-container {
+    background: transparent !important;
+}
+
+.layout-tab-bar {
+    /* 透明：底色完全由父级 `.layout__center` 的 --mist-editor-bg 提供。
+       ❗ 若这里再刷一次同一个半透明变量，半透明会**叠两层**：
+          rgba(255,255,255,.9) 叠 rgba(255,255,255,.9) = 0.99 不透明度，
+          标签栏就比正文区更白、更不透明（0.2.11 修的正是这个）。
+       通用原则：**父级已经有底色时，子级只许透明，不许再刷一次。** */
+    background: transparent !important;
+    border-bottom: none !important;
+    box-shadow: none !important;
+}
+.layout-tab-bar .item {
+    color: var(--b3-theme-on-surface) !important;
+}
+.layout-tab-bar .item--focus {
+    background: var(--mist-chip) !important;
+    color: var(--b3-theme-on-background) !important;
+    /* 0.2.36：去掉标签页那圈 1px 描边。
+       来源是思源原生 `.layout-tab-bar .item--focus{box-shadow:0 0 0 1px
+       var(--b3-border-color) inset}`（另一条同名规则用 primary-lighter）。
+       主题以前只改了背景色，描边一直在 → 选中标签看着像带边框的卡片。
+       这里必须用 box-shadow:none 清，不能靠 border:none（它压根不是 border）。
+       拖拽时的 .item--document-drop 另有 box-shadow，**不要**一起清，那是拖拽反馈。 */
+    box-shadow: none !important;
+}
+
+/* 0.2.37 兜底：上面只清 `.item--focus` 的 box-shadow，实测仍会看到一圈淡粉边。
+   标签页可能画「边」的通道有三个，全部堵死，只留背景色块：
+     · box-shadow —— 原生 focus 用 inset 1px（--b3-border-color / primary-lighter）
+     · outline    —— :focus-visible 的焦点环，颜色可能是 primary
+     · border     —— 万一某个主题/插件补了边框
+   ⚠️ 别把 `.item--document-drop > .item__document-drop` 一起清：那是拖拽落点反馈。 */
+.layout-tab-bar .item,
+.layout-tab-bar .item:focus,
+.layout-tab-bar .item:focus-visible,
+.layout-tab-bar .item--focus {
+    box-shadow: none !important;
+    outline: none !important;
+    border: 0 !important;
+}
+
+/* ---------------------------------------------------------------------
+   三·补、顶部工具栏：一条白色（与编辑区同色），无边框、无阴影
+   思源 .toolbar 自身没有背景色，透出的是 body 灰底，所以顶栏看起来是一条灰带。
+   这里直接给白（半透明，可透出底层背景图），并与标签栏颜色对齐成一条白。
+   --------------------------------------------------------------------- */
+#toolbar,
+.toolbar {
+    background: var(--mist-top-bg) !important;
+    background-color: var(--mist-top-bg) !important;
+    border: none !important;
+    /* 顶栏下方 1px 分割线（对齐原型 .topbar 的 border-bottom:1px solid #e1e3e7）
+       必须写在 border:none 之后：同属性同重要性同特异性时，后写的覆盖先写的。 */
+    border-bottom: 1px solid var(--mist-line) !important;
+    box-shadow: none !important;
+    color: var(--b3-theme-on-surface) !important;
+}
+
+/* 拖拽区、普通图标：透明底、低对比 */
+#toolbar #drag,
+#toolbar .toolbar__item,
+#toolbar .toolbar__text,
+.toolbar #drag {
+    background: transparent !important;
+    border: none !important;
+    color: var(--b3-theme-on-surface) !important;
+}
+#toolbar #drag::before,
+#toolbar #drag::after {
+    background: transparent !important;
+}
+
+/* 悬停：极轻的灰底（不动窗口关闭/最小化/最大化按钮） */
+#toolbar .toolbar__item:not(.toolbar__item--close):hover,
+#toolbar .toolbar__item--active:not(.toolbar__item--close) {
+    background-color: var(--mist-chip) !important;
+    color: var(--b3-theme-on-background) !important;
+}
+
+/* 窗口控制按钮容器保持透明，交给系统绘制 */
+#windowControls,
+#windowControls .toolbar__item {
+    background: transparent !important;
+}
+
+/* =====================================================================
+   四、右侧停靠栏 → 去掉，改成「右缘玻璃悬浮条」
+   DOM：.layout__dockr = 右侧面板容器（原本固定占 220px）
+        └ #dockRight  = 里面 42px 的图标列
+   做法：
+     1) 容器宽 0、无背景无边框 → 右侧停靠栏“消失”，正文直达窗口右缘；
+     2) #dockRight 改成固定悬浮条：默认 14px 玻璃细条，悬停展开成 42px 图标条；
+     3) 仅在真正打开面板（.dock__item--active / focus）时才给容器恢复宽度。
+   注意：容器内不能加 backdrop-filter / transform，否则会改变 fixed 子元素
+        的定位基准，悬浮条会跟着跑偏。
+   ===================================================================== */
+
+/* 4.1 容器：**宽度完全交给思源 JS，主题一个 px 都不许碰**
+
+   ❗铁律（0.2.8 定稿，血换的）
+   原生行为：`.layout__dockr` 是 flex item，`flex-shrink:0`，宽度由 JS 写内联
+   style —— 没有面板时 42px（只剩图标列），点开面板时 42+300px。点击图标时
+   思源 JS 只做两件事：给图标加 `.dock__item--activefocus`、改容器内联宽度。
+   图标激活类**不参与**容器宽度计算。
+
+   0.2.0~0.2.7 的做法：`position:fixed; width:0 !important` 接管容器，再用
+   `:has(.dock__item--active)` 撑到 300px。两个致命缺陷：
+     ① `!important` 优先于内联 style → JS 算好的宽度被压掉；
+     ② `:has()` 依赖「图标必须真在 .layout__dockr 内部」这个未经证实的关系，
+        关系一不成立，容器永远 width:0 → 面板被压成 0 宽 → 点图标「没反应」。
+   结论：**任何试图用 CSS 复刻 JS 布局逻辑的写法都会翻车。** 宽度、定位、
+   overflow 全部还原成原生，主题只负责颜色 / 圆角 / 内边距。
+
+   4.1 【0.2.15 拆掉所有几何改动，回归原生】
+     margin-right:-42px + padding-right:42px 这一对看似只用负边距抵消占位，
+     实际后果：负 margin 让 dockr 的**边框盒**向右多出 42px，撑宽了它的父级
+     `div.fn__flex.fn__flex-1`（该容器 overflow-x:auto）→ 整窗底部一条横向
+     滚动条，拖它整块界面一起平移。
+     实测（CDP 注入对比）：加入本主题 CSS 后该父容器 scrollWidth - clientWidth
+     = +42，正是这一个数字。
+     连同 0.2.13 / 0.2.14 的 overflow-x:hidden 兜底一起删除 —— 那是掩盖症状，
+     而且 0.2.14 的全局裁剪把 `.file-tree` 的 clientHeight 压成 0（目录空白）。
+     现在起这里**只改颜色**，宽度 / 定位 / overflow 一律保持原生的值。 */
+.layout__dockr {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    overflow: hidden !important;
+}
+
+/* 4.11 编辑区 ↔ 右侧面板：1px 极淡竖线（0.2.20 加）
+
+   和左侧 2.4 是同一件事：面板与正文都是浅色，中间又没有阴影（本主题把
+   原生 `box-shadow:-8px 0 24px` 全清了），两块在视觉上直接糊成一片，
+   分不清「到哪儿为止是面板」。这里补一条 1px 线做区域分界。
+
+   —— 两个坑，都不是猜的 ——
+
+   坑①：写在 4.1 之前等于没写。
+       4.1 有 `border: none !important`，与 `border-left: 1px solid` 同特异度
+       同 !important 时**后写的赢**，所以本节必须放在 4.1 之后，否则线被清掉。
+       （左侧 2.4 当初也踩过同一个坑，见 2.3 的注释。）
+
+   坑②：**不能用 `.layout__dockr:has(.dock__item--active)` 判断「面板是否打开」**。
+       实测思源 index.html 的骨架是：
+         body > div.fn__flex-1.fn__flex > [ #dockLeft, #layouts, #dockRight ]
+       图标列 `#dockRight` 是 `#layouts` 的**兄弟**，根本不在 `.layout__dockr`
+       里面（dockr 是 `#layouts > .layout > ...` 的孙子）。因此任何
+       `.layout__dockr:has(.dock__item--active)` 都恒不成立 —— 4.3 里依赖它的
+       那几条规则原本是死代码（0.2.21 已改成正确写法，见 4.3）。
+       ✅ 正确写法：从 `body` 往下找，`body:has(#dockRight .dock__item--active)`。
+
+   为什么只在「面板真的打开」时才画：
+     面板收起时 dockr 的宽度实测是 **0**（不是 42px），此时画线会在窗口右缘
+     留下一条悬空的竖线，很扎眼。条件化之后，线跟着面板出现/消失。
+
+   为什么画在 dockr 的左边框上，而不是面板内容（.layout-tab-container）上：
+     内容容器有多层嵌套（layout-tab-container → layout-tab → [data-id]），
+     逐层都有左边缘，容易画出 2~3 条 1px 叠在一起的「粗线」；
+     画在 dockr 这一个盒子上，像素位置唯一、和拖拽条 6px 命中区（净占位 0）
+     正好重合，不影响拖动与双击复位。 */
+body:has(#dockRight .dock__item--active) .layout__dockr,
+body:has(#dockRight .dock__item--activefocus) .layout__dockr {
+    /* 只画一条 1px 极淡竖线做「面板 ↔ 正文」分界。
+       不右移面板（不再写 margin-right）：面板直接贴右缘满宽，
+       右缘那条悬浮图标列始终是 14px 细条、hover 才弹出 42px，不会多出一截空白。
+       （0.2.24 修 —— 0.2.23 的 margin-right:42px 既留下空白、又逼出 4.31 常驻白卡。） */
+    border-left: 1px solid var(--mist-line) !important;
+}
+
+/* 4.12 右侧玻璃面板上色（0.2.27）：
+   插件 mist-enhancer 的「右侧玻璃面板」颜色/透明度写的是 --mist-dock-bg，
+   但主题里这个变量**只有定义、没有元素在用** —— .layout__dockr 全透明，
+   面板直接露出窗口背景图，滑块怎么拖都没反应（用户实测）。
+   这里让 dockr 自己吃这个变量：面板打开时整块 = dock 色；
+   收起时 dockr 宽度为 0，画了也不可见。内容层（[data-id]/.layout__center）
+   保持透明（见下面「面板内容区」段），让 dock 底透出来，只叠一层。 */
+.layout__dockr {
+    background-color: var(--mist-dock-bg) !important;
+}
+
+/* 4.25 【0.2.15 已删除】横向滚动条收口补丁
+   0.2.13 的 `.layout{overflow-x:hidden}` 与 0.2.14 的「所有容器 overflow-x:hidden」
+   都是**在掩盖症状**，而且实测发现后者副作用明确：注入后 `.file-tree` 的
+   clientHeight 直接被压成 0（目录不显示内容）。
+   真正的病根只有一条：4.1 的负 margin（详见 4.1 注释），已一并删除。
+   ⚠️ 教训：**横向滚动条不要去「关」，要去「除」——把造成溢出的那条几何改动删掉。**
+       overflow-x:hidden 只是把溢出藏起来，藏不掉布局已经被撑坏的事实。 */
+
+/* 4.2 面包屑：原位保留，默认全透明，鼠标移上去才显现
+
+   原生结构（base.css）：
+     .protyle { position:relative; display:flex; flex-direction:column }
+     .protyle-breadcrumb { display:flex; flex-shrink:0; min-height:42px; z-index:5 }
+   它是**流内 flex 子项**，实测渲染高度 34px，正文从它下方开始。
+
+   需求：位置、占位、布局一律不动，只是**平时看不见**，鼠标移上去才出文字。
+
+   做法只改一个不透明度：
+     · 默认 opacity:0 → 整块（含原生实色底）全透明，看不见，但**仍在流内占 34px**，
+       正文起点不变、不会因为隐藏而上下跳。
+     · :hover / :focus-within → opacity:1，文字与图标一次性淡入。
+
+   ⚠️ 关键：这里**不能**加 pointer-events:none —— 一旦穿透，元素永远收不到
+      :hover，就再也显现不出来。opacity:0 不影响命中测试，正好可 hover。
+
+   ❗ 不做浮层、不 translateY、不写 min-height（0.2.16 的浮层方案已否决）。
+
+   0.2.27 补：原生给 .protyle-breadcrumb 刷了 var(--b3-theme-background) 实色白，
+   悬停显现时是一条「死白横条」，不跟编辑区的半透明走。
+   改成透明 —— 显现时透出的是 .layout__center 的 --mist-editor-bg，与正文完全同底。 */
+.protyle-breadcrumb {
+    opacity: 0 !important;
+    background: transparent !important;
+    transition: opacity 0.18s ease !important;
+}
+.protyle-breadcrumb:hover,
+.protyle-breadcrumb:focus-within {
+    opacity: 1 !important;
+}
+
+/* 4.3 图标列 = 右缘悬浮条（默认 14px 玻璃细条，鼠标移到边上弹出图标）
+
+   ⚠️ 与 4.1 的分界：4.1 的容器宽度归思源 JS，**这里改的是图标列自己的宽度**，
+   而 #dockRight 是 `position:fixed` 脱离文档流的独立元素，它变宽变窄
+   **完全不影响 .layout__dockr 的宽度计算** —— 所以 0.2.8 的容器修复
+   和这里的"细条 → 悬停弹出"视觉可以共存，两者互不干扰。 */
+#dockRight {
+    position: fixed !important;
+    right: 0 !important;
+    left: auto !important;
+    top: 50% !important;
+    bottom: auto !important;
+    transform: translateY(-50%) !important;
+    width: 14px !important;
+    min-width: 0 !important;
+    height: 76px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border-radius: 11px 0 0 11px !important;
+    background: var(--mist-glass) !important;
+    backdrop-filter: blur(10px) saturate(160%) !important;
+    -webkit-backdrop-filter: blur(10px) saturate(160%) !important;
+    border: 1px solid var(--mist-glass-border) !important;
+    border-right: none !important;
+    box-shadow: 0 4px 18px var(--mist-glass-shadow), inset 0 1px 0 var(--mist-glass-inset) !important;
+    overflow: hidden !important;
+    z-index: 61 !important;
+    transition: width 0.24s cubic-bezier(0.22, 0.61, 0.36, 1),
+                height 0.24s cubic-bezier(0.22, 0.61, 0.36, 1),
+                border-radius 0.24s ease,
+                background 0.2s ease,
+                box-shadow 0.24s ease !important;
+}
+
+/* 收起态（14px 细条）不再画装饰图标 —— 纯感应条，hover 才弹出完整图标列。
+   原 ::after 树状图标已移除（0.2.25，应老板要求「感应块上的图标去掉」）。 */
+
+/* 悬停：展开成 42px 的磨砂图标条
+   高度**固定为 7 个图标的高度**（对齐原型观感）：
+     图标 32px + 上下 margin 各 4px = 每个占 40px → 7×40 = 280px
+     加上下 padding 8px×2 = 16px → 296px
+   第 8 个图标起：条内向下滚动（overflow-y:auto），滚动条收细、隐轨道。
+   窗口过矮时用 calc(100vh - 96px) 兜底，避免条子顶出屏幕。
+
+   触发条件（只有两个，共用同一套样式）：
+     ① `:hover` —— 鼠标移到右缘边上（主要交互）；
+     ② `:focus-within` —— 键盘/点击把焦点落进图标列。
+
+   ❗0.2.21 曾加过第三条「面板已打开时也展开」，0.2.22 撤回，原因有两条：
+     ① 条子一直摊着，「鼠标靠到右缘才弹出」这个主交互就消失了 ——
+        老板的原话是「我鼠标边上悬浮弹出怎么没有了」；
+     ② 展开后是 42px 的实心白卡，**压在设置面板最右侧 42px 上**，
+        面板末尾的文字和数值会被糊掉一截。
+   换面板 / 关面板的正确出口不在这里，而是插件面板自带的关闭按钮（0.2.7）
+   与「悬停右缘」这个动作本身。
+   ⚠️ 0.2.23 又犯了同一条错：加 4.31「面板打开时常驻 42px」+ 4.11 的
+      margin-right:42px 给它让位，结果是「白卡常驻」+「面板右侧多一截空白」。
+      0.2.24 已把这两处一并撤掉 —— 图标列在所有状态下都只靠 hover/focus 弹出。
+
+   ⚠️ 只改 #dockRight 自身宽度，**不碰 .layout__dockr 的 width**。 */
+/* 悬停弹出：鼠标移到右缘 → 14px 细条展开成 42px 图标条。
+   面板开不开都一样（不再区分状态），统一「收起时是 14px 细条，hover 才弹出」。
+   （0.2.24 删掉 0.2.23 的 4.31「面板打开时常驻 42px」——那个白卡既常驻碍眼、
+    又逼出 4.11 的 margin-right 留白；现在图标列在所有状态下都只靠 hover/focus 弹出。） */
+#dockRight:hover,
+#dockRight:focus-within {
+    width: 42px !important;
+    height: 296px !important;
+    min-height: 0 !important;
+    max-height: calc(100vh - 96px) !important;
+    padding: 8px 0 !important;
+    border-radius: 14px 0 0 14px !important;
+    background: var(--mist-glass-hover) !important;
+    backdrop-filter: blur(18px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(18px) saturate(180%) !important;
+    box-shadow: 0 10px 40px var(--mist-glass-shadow-hover), inset 0 1px 0 var(--mist-glass-inset) !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    scrollbar-width: thin !important;
+    scrollbar-color: var(--mist-scroll-thumb) transparent !important;
+    overscroll-behavior: contain !important;
+}
+
+/* 展开条的滚动条：3px 细条、无轨道，不挤压 32px 图标 */
+#dockRight::-webkit-scrollbar {
+    width: 3px !important;
+}
+#dockRight::-webkit-scrollbar-track {
+    background: transparent !important;
+}
+#dockRight::-webkit-scrollbar-thumb {
+    background: var(--mist-scroll-thumb) !important;
+    border-radius: 3px !important;
+}
+#dockRight::-webkit-scrollbar-thumb:hover {
+    background: var(--mist-scroll-thumb-hover) !important;
+}
+/* 4.4 图片细边框（0.2.28 起；0.2.38 改挂到 img 本体）
+   线色专用 --mist-img-line（浅 #c9cdd4 / 暗 rgba(255,255,255,.18)）：
+   --mist-line 那档太浅，压在彩色图上等于没画。
+
+   ⚠️ 描边**不能挂在 .img 上**（0.2.28 的写法，0.2.38 修）：
+   .img 在思源里是 display:inline 的行内盒，高度只有一行（实测 18~20px），
+   不是图片高度。给它加 border，得到的是「一条 20px 高的横带」而不是图片框：
+   横带的上下边被图片盖住（子元素后画），只有左右两端各 5px 露在图片外面
+   （4px 留白 span + 1px），于是图片两侧各冒出一个白色小凸起。
+   改挂到 <img> 本体：它的盒子就是图片本身，描边严丝合缝。
+   .img 的 border / radius / overflow 一并清掉，避免再画出那条横带。 */
+.protyle-wysiwyg .img,
+.b3-typography .img {
+    border: 0 !important;
+    border-radius: 0 !important;
+    overflow: visible !important;
+}
+.protyle-wysiwyg .img img,
+.b3-typography .img img {
+    border: 1px solid var(--mist-img-line) !important;
+    border-radius: 4px !important;
+}
+
+/* 图标：收起时隐藏（避免 14px 宽度把图标切一半），展开时淡入 */
+#dockRight .dock__item,
+#dockRight .dock__items {
+    opacity: 0 !important;
+    transition: opacity 0.18s ease !important;
+}
+#dockRight:hover .dock__item,
+#dockRight:hover .dock__items,
+#dockRight:focus-within .dock__item,
+#dockRight:focus-within .dock__items {
+    opacity: 1 !important;
+}
+
+/* 图标做成 32px 圆角玻璃块（对齐效果图的插件条） */
+#dockRight .dock__item {
+    width: 32px !important;
+    height: 32px !important;
+    padding: 0 !important;
+    margin: 4px !important;
+    flex-shrink: 0 !important;
+    border-radius: 10px !important;
+    justify-content: center !important;
+    align-items: center !important;
+    background: var(--mist-chip-bg) !important;
+    border: 1px solid var(--mist-chip-line) !important;
+    color: var(--mist-chip-color) !important;
+    box-shadow: 0 1px 3px var(--mist-chip-shadow) !important;
+    transition: all 0.16s ease !important;
+}
+#dockRight .dock__item:hover {
+    background: var(--mist-chip-bg-hover) !important;
+    color: var(--mist-accent) !important;
+    box-shadow: 0 4px 12px var(--mist-chip-shadow-hover) !important;
+    transform: translateY(-1px) !important;
+}
+#dockRight .dock__item--active,
+#dockRight .dock__item--activefocus {
+    background: var(--mist-accent-soft) !important;
+    color: var(--mist-accent) !important;
+    border-color: var(--mist-accent-line) !important;
+}
+#dockRight .dock__item svg {
+    width: 17px !important;
+    height: 17px !important;
+}
+#dockRight .dock__split::after {
+    display: none !important;
+}
+
+
+/* 面板内容区：透明底、无边框 */
+.layout__dockr [data-id],
+.layout__dockr .layout__center {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* 4.4 底部状态栏 → 去掉整条横条，改成右下角悬浮小胶囊
+   （做法同 QYL：把 #status 变成 fixed 定位的胶囊，不再占满一行、不再有上边框） */
+#status,
+#status.status {
+    position: fixed !important;
+    left: auto !important;
+    right: 12px !important;
+    bottom: 10px !important;
+    top: auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+    height: 26px !important;
+    line-height: 26px !important;
+    padding: 0 12px !important;
+    margin: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    background: var(--mist-status-bg) !important;
+    backdrop-filter: blur(14px) saturate(170%) !important;
+    -webkit-backdrop-filter: blur(14px) saturate(170%) !important;
+    border: 1px solid var(--mist-status-line) !important;
+    border-radius: 13px !important;
+    box-shadow: 0 4px 16px var(--mist-status-shadow) !important;
+    z-index: 50 !important;
+    opacity: 0.6 !important;
+    transition: opacity 0.2s ease, box-shadow 0.2s ease !important;
+    overflow: hidden !important;
+}
+#status:hover,
+#status.status:hover {
+    opacity: 1 !important;
+    box-shadow: 0 8px 24px var(--mist-status-shadow-hover) !important;
+}
+/* 胶囊内部：去掉一切边框与底色，字号收小 */
+#status > div,
+#status .status__msg,
+#status .status__counter,
+#status .status__backgroundtask {
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    font-size: 12px !important;
+}
+/* 底部空出来的那块不再有分隔线 */
+.layout__dockb::after,
+.layout__dockb::before {
+    display: none !important;
+}
+
+/* =====================================================================
+   五、正文字体 / 字号；文档树字体 / 字号
+   ===================================================================== */
+.protyle-wysiwyg,
+.protyle-wysiwyg .p,
+.b3-typography {
+    font-family: var(--mist-editor-font) !important;
+    font-size: var(--mist-editor-size) !important;
+}
+
+/* 文档标题字号独立于正文：--mist-title-size。
+   注意：这里不能把 .protyle-title 也写进上一组 —— 父子同特异性 + 同为
+   !important 时靠书写顺序决定，会互相打架。父级只留 background:transparent
+   （见第三节），字号只挂在 __input 上。 */
+.protyle-title__input {
+    font-family: var(--mist-editor-font) !important;
+    font-size: var(--mist-title-size) !important;
+}
+
+.file-tree,
+.sy__file,
+.file-tree .b3-list-item {
+    font-family: var(--mist-tree-font) !important;
+    font-size: var(--mist-tree-size) !important;
+}
+
+/* ===== 文档树图标：一律交回思源原生渲染 =====
+   教训（0.2.12）：`.b3-list-item__icon` 不是一个纯装饰元素，它是思源的
+   「换图标」按钮 —— 原生 JS 给它写 aria-label = languages.changeIcon，
+   点击弹出 emoji 选择器；它的 ::after 也不是空壳，而是 inset:-3px 0 的
+   点击热区扩展层。
+
+   0.1.x～0.2.11 这里做过「默认图标 emoji 替换」：svg{display:none} +
+   font-size:0 + ::after{content:📓/📄}。后果是三重的：
+     ① svg 被隐藏 → 原生图标消失；
+     ② font-size:0 → 用户自定义的 emoji 图标（文本节点）一起消失；
+     ③ ::after 被占成 emoji 文本 → 原生热区层语义被顶掉。
+   于是点图标选完 emoji 后，视觉永远停在 📓/📄 → 「换不了图标」。
+
+   结论：文档树图标必须完全交给思源自己管，CSS 一行都不覆盖。
+   要自定义图标，用思源自带入口（点图标 / 右键 → 图标）。 */
+
+/* =====================================================================
+   六、暗色模式（0.2.32 重写）
+
+   ❗根因（老板反馈「薄雾没有适配暗色，怎么设都不生效」）：
+     思源的机制是「一个主题一份 theme.css，按当前明暗只加载一份」。
+     暗色下用薄雾时，**midnight 的 theme.css 根本不会被加载**，而 base.css
+     的默认值是浅色。所以薄雾里只覆盖 7 个变量 → 菜单/对话框/下拉/代码块/
+     表格/callout/PDF 全部退回浅色默认值，暗色下是一片死白块。
+     ✅ 正解：暗色段必须自带**整套** --b3-* 暗色变量（下面这一大段值取自
+        midnight，是思源官方暗色基准），薄雾只在其上叠自己的四区底色。
+
+   ❗另一半根因在思源配置：`appearance.themeDark` 若还是 midnight，
+     切暗色时加载的是 midnight，薄雾连 CSS 都不会被解析，插件也会 clear()。
+     → conf 里 themeDark 必须也是「薄雾」。
+   ===================================================================== */
+:root[data-theme-mode="dark"] {
+    /* 让原生控件（滚动条、输入框、下拉、日期选择器）跟着变暗 */
+    color-scheme: dark;
+
+    /* —— 基础色板（取自 midnight，暗色基准） —— */
+    /* 主色 */
+    --b3-theme-primary: #3575f0;
+    --b3-theme-primary-light: rgba(53, 117, 240, .72);
+    --b3-theme-primary-lighter: rgba(53, 117, 240, .48);
+    --b3-theme-primary-lightest: rgba(53, 117, 240, .24);
+    --b3-theme-secondary: #f3a92f;
+    --b3-theme-background: #1e1e1e;
+    --b3-theme-background-light: rgba(255, 255, 255, .1);
+    --b3-theme-surface: #2c2c2c;
+    --b3-theme-surface-light: rgba(41, 42, 45, .86);
+    --b3-theme-surface-lighter: rgba(230, 230, 230, .1);
+    --b3-theme-error: #d23f31;
+    --b3-theme-success: #65b84d;
+    /* 文字颜色 */
+    --b3-theme-on-primary: #fff;
+    --b3-theme-on-secondary: #fff;
+    --b3-theme-on-background: #dadada;
+    --b3-theme-on-surface: #9aa0a6;
+    --b3-theme-on-surface-light: #bababa;
+    --b3-theme-on-surface-lighter: #545454;
+    --b3-theme-on-error: #fff;
+    /* 背景 */
+    --b3-body-background: #2e3236;
+    --b3-body-background-hl-opacity: 0.24;
+    --b3-body-background-hl: 219, 86%, 57%;
+    /* 顶部工具栏 */
+    --b3-toolbar-color: var(--b3-theme-on-surface-light);
+    --b3-toolbar-hover: rgba(255, 255, 255, .08);
+    --b3-toolbar-left-mac: 74px;
+    /* 线条 */
+    --b3-border-color: #484848;
+    --b3-border-radius: 6px;
+    --b3-border-radius-s: 3px;
+    --b3-border-radius-b: 12px;
+    /* 滚动条 */
+    --b3-scroll-color: rgba(230, 230, 230, .2);
+    /* 列表 */
+    --b3-list-hover: rgba(255, 255, 255, .10);
+    --b3-list-icon-hover: rgba(201, 209, 217, .1);
+    /* 列表脑图父子连线：线宽使用正数或 px，表示缩放前的像素值；节点自定义样式优先于普通状态 */
+    --b3-mindmap-line-color: var(--b3-border-color);
+    --b3-mindmap-line-width: 1.5;
+    /* 选中状态优先于悬停状态；initial 沿用普通配色，auto 根据普通线宽和缩放加粗 */
+    --b3-mindmap-line-hover-color: initial;
+    --b3-mindmap-line-hover-width: auto;
+    --b3-mindmap-line-selected-color: initial;
+    --b3-mindmap-line-selected-width: auto;
+    /* 列表脑图关系线：状态规则与父子连线一致，新建预览使用普通状态的颜色和线宽 */
+    --b3-mindmap-relation-color: var(--b3-theme-primary);
+    --b3-mindmap-relation-width: 1.5;
+    --b3-mindmap-relation-hover-color: initial;
+    --b3-mindmap-relation-hover-width: auto;
+    --b3-mindmap-relation-selected-color: initial;
+    --b3-mindmap-relation-selected-width: auto;
+    /* 思维导图概要线：显式颜色始终优先，状态规则与父子连线一致，打印使用普通样式 */
+    --b3-mindmap-summary-color: var(--b3-border-color);
+    --b3-mindmap-summary-width: 1.5;
+    --b3-mindmap-summary-hover-color: initial;
+    --b3-mindmap-summary-hover-width: auto;
+    --b3-mindmap-summary-selected-color: initial;
+    --b3-mindmap-summary-selected-width: auto;
+    /* 菜单 */
+    --b3-menu-background: var(--b3-theme-background);
+    --b3-menu-icon-color: rgba(255, 255, 255, .7);
+    /* 提示 */
+    --b3-tooltips-background: #030303;
+    --b3-tooltips-color: var(--b3-theme-on-surface-light);
+    --b3-tooltips-second-color: #7d7c7a;
+    --b3-tooltips-shadow: 0 2px 8px rgba(0, 0, 0, .5);
+    /* 为空提示 */
+    --b3-empty-color: var(--b3-theme-on-surface);
+    /* 遮罩 */
+    --b3-mask-background: rgba(10, 10, 10, .4);
+    /* 卡片背景 */
+    --b3-card-error-color: rgb(243, 153, 147);
+    --b3-card-error-background: #442724;
+    --b3-card-warning-color: rgb(255, 213, 153);
+    --b3-card-warning-background: #554636;
+    --b3-card-info-color: rgb(166, 213, 250);
+    --b3-card-info-background: #28405c;
+    --b3-card-success-color: rgb(183, 223, 185);
+    --b3-card-success-background: #425347;
+    /* 高亮 */
+    --b3-highlight-color: #222;
+    --b3-highlight-background: #ffff00;
+    --b3-highlight-current-background: #ff9632;
+    /* 下拉菜单：底色与菜单保持一致，避免 select 嵌入菜单时出现色块 */
+    --b3-select-background: url("data:image/svg+xml;utf8,<svg fill='rgba(154, 160, 166, .68)' height='24' viewBox='0 0 24 24' width='24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/><path d='M0 0h24v24H0z' fill='none'/></svg>") no-repeat right 2px center var(--b3-menu-background);
+    /* switch */
+    --b3-switch-background: #444746;
+    --b3-switch-border: var(--b3-theme-on-surface-light);
+    --b3-switch-hover: rgba(253, 252, 251, .10);
+    --b3-switch-checked: var(--b3-theme-primary);
+    --b3-switch-checked-background: #a8c7fa;
+    --b3-switch-checked-hover: var(--b3-theme-primary);
+    --b3-switch-checked-hover2: rgba(253, 252, 251, .10);
+    /* 阴影 */
+    --b3-point-shadow: inset 0 .5px .5px .5px rgba(255, 255, 255, .12), 0 3px 8px rgba(0, 0, 0, .3), 0 0 0 0 transparent;
+    --b3-dialog-shadow: 0 8px 24px rgba(0, 0, 0, .8), 0 0 0 1px rgba(255, 255, 255, .12);
+    --b3-button-shadow: 0 1px 2px 0 rgb(0 0 0 / .3), 0 1px 3px 1px rgb(255 255 255 /.15);
+    --b3-button-active-shadow: 0 2px 3px 1px rgb(0 0 0 / .3), 0 2px 4px 2px rgb(255 255 255 /.15);
+    /* 图表颜色 */
+    --b3-graph-p-point: #076f7e;
+    --b3-graph-heading-point: hsl(254, 80%, 74.8%);
+    --b3-graph-math-point: #80FFA5;
+    --b3-graph-code-point: #00DDFF;
+    --b3-graph-table-point: #37A2FF;
+    --b3-graph-list-point: #FF0087;
+    --b3-graph-todo-point: #FFBF00;
+    --b3-graph-olist-point: #b3005f;
+    --b3-graph-listitem-point: #f65b00;
+    --b3-graph-bq-point: #8d48e3;
+    --b3-graph-callout-point: var(--b3-theme-success);
+    --b3-graph-super-point: #dd79ff;
+    --b3-graph-doc-point: #e8eaed;
+    --b3-graph-tag-point: #dbf32f;
+    --b3-graph-asset-point: #05c091;
+    --b3-graph-line: rgba(255, 255, 255, .55);
+    --b3-graph-ref-line: #d23f31;
+    --b3-graph-tag-line: #5f6b06;
+    --b3-graph-tag-tag-line: #dbf32f;
+    --b3-graph-asset-line: #037457;
+    --b3-graph-hl-point: #f2c14e;
+    --b3-graph-hl-line: #d23f31;
+    /* 代码片段背景 */
+    --b3-protyle-code-background: rgba(240, 246, 252, .15);
+    /* 所见即所得行内元素颜色 */
+    --b3-protyle-inline-strong-color: inherit;
+    --b3-protyle-inline-em-color: inherit;
+    --b3-protyle-inline-u-color: inherit;
+    --b3-protyle-inline-s-color: inherit;
+    --b3-protyle-inline-link-color: #8ab4f8;
+    --b3-protyle-inline-mark-background: #b29100;
+    --b3-protyle-inline-mark-color: var(--b3-theme-on-background);
+    --b3-protyle-inline-tag-color: rgba(255, 255, 255, .55);
+    --b3-protyle-inline-blockref-color: #b388ff;
+    --b3-protyle-inline-fileref-color: var(--b3-theme-secondary);
+    /* callout */
+    --b3-callout-note: var(--b3-theme-primary);
+    --b3-callout-tip: var(--b3-theme-success);
+    --b3-callout-caution: var(--b3-theme-error);
+    --b3-callout-important: var(--b3-protyle-inline-blockref-color);
+    --b3-callout-warning: var(--b3-highlight-current-background);
+    /* 表格 */
+    --b3-table-even-background: rgba(255, 255, 255, .06);
+    /* 数据库 */
+    --b3-av-gallery-shadow: rgba(0, 0, 0, 0.04) 0px 2px 4px 0px, var(--b3-border-color) 0px 0px 0px 1px;
+    /* 嵌入块 */
+    --b3-embed-background: transparent;
+    /* 引述块 */
+    --b3-bq-background: transparent;
+    /* 父块颜色 */
+    --b3-parent-background: var(--b3-theme-background);
+
+    /* —— 薄雾覆盖：四区底色 / 线条 / 文字 —— */
+    --mist-side-bg: rgba(38, 41, 47, 0.92);     /* 侧边栏：冷灰，略带蓝 */
+    --mist-editor-bg: rgba(26, 28, 32, 0.94);   /* 编辑区 */
+    --mist-dock-bg: rgba(40, 43, 50, 0.94);     /* 右侧玻璃面板 */
+    --mist-top-bg: #1e2025;                     /* 顶部工具栏 */
+    --mist-line: rgba(255, 255, 255, 0.09);
+    --mist-img-line: rgba(255, 255, 255, 0.18);
+    --b3-theme-on-background: #c8ccd2;
+    --b3-theme-on-surface: #a8adb5;
+    --b3-theme-on-surface-light: rgba(168, 173, 181, 0.7);
+    --b3-theme-on-surface-lighter: #6b7079;
+    --b3-body-background: #1c1e22;
+
+    /* —— 薄雾覆盖：语义色（0.2.32 变量化，规则本体不再硬编码） —— */
+    --mist-hover: rgba(255, 255, 255, 0.055);
+    --mist-chip: rgba(255, 255, 255, 0.07);
+    --mist-accent: #7aa2ff;                     /* 暗色下蓝要提亮，否则选中项看不清 */
+    --mist-accent-soft: rgba(122, 162, 255, 0.16);
+    --mist-accent-line: rgba(122, 162, 255, 0.32);
+
+    /* 右缘玻璃条：深色磨砂，绝不能是白玻璃 */
+    --mist-glass: rgba(32, 35, 41, 0.66);
+    --mist-glass-hover: linear-gradient(165deg, rgba(47, 51, 59, 0.97), rgba(34, 37, 43, 0.95));
+    --mist-glass-border: rgba(255, 255, 255, 0.1);
+    --mist-glass-inset: rgba(255, 255, 255, 0.07);
+    --mist-glass-shadow: rgba(0, 0, 0, 0.45);
+    --mist-glass-shadow-hover: rgba(0, 0, 0, 0.55);
+
+    /* 玻璃条里的图标块 */
+    --mist-chip-bg: rgba(255, 255, 255, 0.06);
+    --mist-chip-bg-hover: rgba(255, 255, 255, 0.12);
+    --mist-chip-line: rgba(255, 255, 255, 0.08);
+    --mist-chip-color: #a8adb5;
+    --mist-chip-shadow: rgba(0, 0, 0, 0.3);
+    --mist-chip-shadow-hover: rgba(0, 0, 0, 0.45);
+
+    /* 右下角状态胶囊 */
+    --mist-status-bg: rgba(34, 37, 43, 0.8);
+    --mist-status-line: rgba(255, 255, 255, 0.09);
+    --mist-status-shadow: rgba(0, 0, 0, 0.4);
+    --mist-status-shadow-hover: rgba(0, 0, 0, 0.55);
+
+    /* 滚动条 */
+    --mist-scroll-thumb: rgba(255, 255, 255, 0.18);
+    --mist-scroll-thumb-hover: rgba(255, 255, 255, 0.3);
+
+    /* 去阴影（薄雾的「三面去框」在暗色下同样成立） */
+    --b3-dock-shadow-color: transparent;
+    --b3-layout-space: 6px;
+    --b3-layout-space-margin: 0px;
+}
+
+/* =====================================================================
+   七、柔和色板 + 导图蒙版（0.2.33）
+
+   ❗问题（老板：「思源里的默认颜色都很丑，颜色太深」）：
+     数据库单选/多选、正文「字体颜色/背景色」的色块都长这样 ——
+       <span class="b3-chip" style="background-color:var(--b3-font-background4);
+                                    color:var(--b3-font-color4)">
+     走的是思源全局 13 组色板变量。薄雾从来没定义过这 13 组，于是直接
+     沿用 daylight 的默认值：3/4 号是压到 35% 明度的深蓝深绿、7 号橙字配
+     橙底、10~12 号是高饱和荧光青/绿/黄。一屏色块看下去又硬又脏。
+
+   ✅ 解法（2026-10-31 老板拍板：改全局，不只改数据库）：
+      底色 → hsl(H, 48~65%, 92~94%)，几乎只剩一点点色相；
+      文字 → hsl(H, 40%, 38%)，明度定在 38%，饱和度比默认再降一档
+             （默认多在 55~90%，这是「字淡一档」的具体落法）。
+      13 个色相重新拉开距离，避免原来 2 号黄 / 7 号橙、3 号蓝 / 6 号蓝
+      两两撞色。
+
+   ⚠️ 已知连带影响（都属于「改全局」的必然结果，不是 bug）：
+      ① 正文「字体颜色 / 背景色」调色板用的是同一套变量，会一起变柔和；
+      ② 数据库「自定义颜色」是 inline light-dark()，CSS 盖不到，仍是原色；
+      ③ 13 号是「反白」标签（底=正文色、字=背景色），**必须保留 var 引用**，
+         写死会在暗色下瞎掉，所以下面整套都跳过 13 号。
+   ===================================================================== */
+:root {
+    /* —— 文字：明度 38%、饱和度 40%（比默认淡一档） —— */
+    --b3-font-color1: hsl(0, 40%, 38%);      /* 红 */
+    --b3-font-color2: hsl(42, 42%, 35%);     /* 黄  ← 见下方「按色相补偿」 */
+    --b3-font-color3: hsl(212, 40%, 38%);    /* 蓝 */
+    --b3-font-color4: hsl(148, 40%, 35%);    /* 绿  ← 补偿 */
+    --b3-font-color5: hsl(215, 10%, 42%);    /* 灰（中性色，比其它略提一点明度） */
+    --b3-font-color6: hsl(226, 40%, 38%);    /* 靛 */
+    --b3-font-color7: hsl(24, 42%, 38%);     /* 橙 */
+    --b3-font-color8: hsl(348, 40%, 38%);    /* 玫红 */
+    --b3-font-color9: hsl(312, 38%, 38%);    /* 品红 */
+    --b3-font-color10: hsl(190, 40%, 35%);   /* 青  ← 补偿 */
+    --b3-font-color11: hsl(165, 38%, 34%);   /* 绿松 ← 补偿 */
+    --b3-font-color12: hsl(55, 42%, 34%);    /* 橄榄 ← 补偿 */
+
+    /* —— 底色：明度 93~94%，只留一丝色相 —— */
+    /* 「按色相补偿」：HSL 的明度是感知平均值，同样 38% 的绿/黄/青算出来的
+       相对亮度比红/紫高一大截，实测文字/底色对比只有 3.5~3.9:1（小字要 4.5）。
+       所以黄 2、绿 4、青 10、绿松 11、橄榄 12 这五族单独把文字压到 34~35%、
+       底色提亮到 94%，其余八族老老实实留在 38% / 93%。 */
+    --b3-font-background1: hsl(0, 58%, 93%);
+    --b3-font-background2: hsl(42, 68%, 94%);
+    --b3-font-background3: hsl(212, 58%, 93%);
+    --b3-font-background4: hsl(148, 55%, 94%);
+    --b3-font-background5: hsl(215, 12%, 93%);
+    --b3-font-background6: hsl(226, 58%, 93%);
+    --b3-font-background7: hsl(24, 62%, 92%);
+    --b3-font-background8: hsl(348, 58%, 93%);
+    --b3-font-background9: hsl(312, 52%, 94%);
+    --b3-font-background10: hsl(190, 58%, 94%);
+    --b3-font-background11: hsl(165, 52%, 94%);
+    --b3-font-background12: hsl(55, 65%, 94%);
+
+    /* 思维导图节点蒙版（2026-10-31 拍板 45%）。
+       节点颜色是 JS 写死的 inline background-color，CSS 改不了色相，
+       只能在它上面覆一层半透明色把它压淡。
+       用 background-image 而不是 box-shadow：导图的 hover / selected /
+       relation 三种状态全靠 inset box-shadow 画 1~2px 描边，一碰
+       box-shadow 就会把描边吃掉；而 JS 只写 backgroundColor，不写
+       background 简写，所以 background-image 这层是安全的。 */
+    --mist-map-veil: rgba(255, 255, 255, 0.45);
+}
+
+/* 暗色：底色压深、文字提亮，保证 chip 在深色卡上仍然分得清；
+   导图蒙版换成黑罩 —— 深色纸面上一片白罩会把彩色节点糊成灰白。 */
+:root[data-theme-mode="dark"] {
+    --b3-font-color1: hsl(0, 55%, 78%);
+    --b3-font-color2: hsl(42, 60%, 78%);
+    --b3-font-color3: hsl(212, 55%, 78%);
+    --b3-font-color4: hsl(148, 45%, 76%);
+    --b3-font-color5: hsl(215, 12%, 72%);
+    --b3-font-color6: hsl(226, 55%, 79%);
+    --b3-font-color7: hsl(24, 60%, 78%);
+    --b3-font-color8: hsl(348, 55%, 79%);
+    --b3-font-color9: hsl(312, 45%, 79%);
+    --b3-font-color10: hsl(190, 50%, 76%);
+    --b3-font-color11: hsl(165, 42%, 75%);
+    --b3-font-color12: hsl(55, 55%, 76%);
+
+    --b3-font-background1: hsl(0, 30%, 24%);
+    --b3-font-background2: hsl(42, 28%, 24%);
+    --b3-font-background3: hsl(212, 30%, 24%);
+    --b3-font-background4: hsl(148, 26%, 23%);
+    --b3-font-background5: hsl(215, 10%, 27%);
+    --b3-font-background6: hsl(226, 30%, 25%);
+    --b3-font-background7: hsl(24, 30%, 24%);
+    --b3-font-background8: hsl(348, 28%, 25%);
+    --b3-font-background9: hsl(312, 26%, 25%);
+    --b3-font-background10: hsl(190, 28%, 23%);
+    --b3-font-background11: hsl(165, 26%, 23%);
+    --b3-font-background12: hsl(55, 28%, 23%);
+
+    --mist-map-veil: rgba(0, 0, 0, 0.30);
+}
+
+/* 导图节点蒙版本体（**兜底专用**）。
+   0.2.34 起导图配色由 mist-enhancer 插件接管（改成极简单色，见插件 0.2.24），
+   插件在时会打 html[data-mist-plugin]，这条规则自动让位 —— 否则插件刚上完色，
+   又被这里的 45% 蒙版压一遍，等于白干。
+   没装插件的人仍然拿这层蒙版兜底（主题不依赖插件也完整）。
+
+   三条 :not 是准入条件，缺一不可：
+     ① --colored       ：JS 只在「节点有颜色」时才加这个类；
+     ② [style*="background-color"]：JS 给无色节点赋值空串时，inline style 里
+        根本不会出现这个属性 —— 必须要求属性真实存在，否则无色节点会被
+        罩成一块白斑；
+     ③ 排除显式透明 —— 避免 `background-color: transparent` 也被算作有颜色。 */
+html:not([data-mist-plugin]) .mindmap-view__node--colored[style*="background-color"]:not([style*="background-color: transparent"]):not([style*="background-color:transparent"]):not([style*="rgba(0, 0, 0, 0)"]):not([style*="rgba(0,0,0,0)"]) {
+    background-image: linear-gradient(var(--mist-map-veil), var(--mist-map-veil));
+}
+}  /* end @media (hover: hover) and (pointer: fine) —— 桌面专属 */
