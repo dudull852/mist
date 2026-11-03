@@ -1,0 +1,45 @@
+{
+    "name": "mist",
+    "author": "WorkBuddy",
+    "url": "https://github.com/dudull852/mist",
+    "version": "0.2.38",
+    "minAppVersion": "3.7.0",
+    "displayName": {
+        "default": "Mist",
+        "zh-CN": "薄雾"
+    },
+    "description": {
+        "default": "A frosted, low-contrast theme: per-region colours and opacity, background image, custom fonts, doc-tree icons and five one-click palettes.",
+        "zh-CN": "半透明磨砂、柔和低对比的主题。分区颜色与透明度、背景图、自定义字体与文档树图标、5 套一键套用配色。"
+    },
+    "readme": {
+        "default": "README.md",
+        "zh-CN": "README.zh-CN.md"
+    },
+    "icon": "icon.png",
+    "preview": "preview.png",
+    "keywords": [
+        "mist",
+        "薄雾",
+        "磨砂",
+        "玻璃",
+        "半透明",
+        "透明",
+        "frosted",
+        "glass",
+        "translucent",
+        "opacity",
+        "background",
+        "light",
+        "dark"
+    ],
+    "modes": [
+        "light",
+        "dark"
+    ],
+    "frontends": [
+        "desktop",
+        "desktop-window",
+        "mobile"
+    ]
+}
