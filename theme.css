@@ -450,6 +450,121 @@ body:has(.layout__dockl.layout--float) #dockLeft {
     pointer-events: auto;
 }
 
+/* 2.7 【0.2.39 加】文档树条目：只留「新建子文档」的 ＋，其余操作全部去掉
+   （老板：「文档树里面除了留个浅浅的＋号，其他的都去掉」；
+     笔记本那一行同理：「⋮ 跟右键重复了，用右键就能解决」）
+
+   ❗条目结构 —— 思源同时存在两套渲染，且「文档行 / 笔记本行」标记也不一样：
+     新树（data-pin-*）：toggle → icon → text → [data-pin-more]（⋮）→ [data-pin-new]（＋）
+     旧树：            toggle → icon → text → [data-type="more-file"]   → [data-type="new"]（＋）
+     笔记本行：        toggle → icon/switch → text → [data-type="more-root"] → [data-type="new"]（＋）
+   ⇒ 「＋」的标记不唯一：`data-pin-new` 与 `data-type="new"` 都必须在 :not() 里放行，
+     否则连＋一起藏掉。
+
+   ❗用「文本之后的所有兄弟」而不是只点名 `.b3-list-item__action`：
+     不同小版本还会往这一簇里塞别的按钮（重命名/编辑等），点名写死一个漏一个。
+     但必须排除 `.counter` —— 引用计数是 2.6 的 hover 淡入，别一起藏了。
+
+   ❗用 display:none，不用 opacity：
+     残留占位会让标题可用宽度在该行 hover 时突变，省略号位置左右跳。
+
+   ⋮ 去掉不影响功能：右键任意一行，出来的就是同一个菜单（含关闭笔记本/设置）。 */
+.sy__file li:is([data-type="navigation-file"], [data-type="navigation-root"]) > .b3-list-item__text ~ *:not([data-pin-new]):not([data-type="new"]):not(.counter) {
+    display: none !important;
+}
+
+/* ＋ 本身压成「浅浅的」：
+   ❗这一簇按钮只在 hover 该行时才出现（li 带 b3-list-item--hide-action），
+     所以「肉眼看到的常态」其实是 :hover 分支，浓度按它定，不能按基态定。
+   行 hover → 38%（浅）；鼠标真的点到＋上 → 75%（够了才亮）。 */
+.sy__file li:is([data-type="navigation-file"], [data-type="navigation-root"]) > [data-pin-new],
+.sy__file li:is([data-type="navigation-file"], [data-type="navigation-root"]) > [data-type="new"] {
+    color: color-mix(in srgb, var(--b3-theme-on-background) 30%, transparent);
+    transition: color 0.12s ease;
+}
+.sy__file li:is([data-type="navigation-file"], [data-type="navigation-root"]):hover > [data-pin-new],
+.sy__file li:is([data-type="navigation-file"], [data-type="navigation-root"]):hover > [data-type="new"] {
+    color: color-mix(in srgb, var(--b3-theme-on-background) 38%, transparent);
+}
+.sy__file li:is([data-type="navigation-file"], [data-type="navigation-root"]) > [data-pin-new]:hover,
+.sy__file li:is([data-type="navigation-file"], [data-type="navigation-root"]) > [data-type="new"]:hover {
+    color: color-mix(in srgb, var(--b3-theme-on-background) 75%, transparent);
+}
+
+/* 2.8 【0.2.39 加】文档树面板头部的 4 个操作键（聚焦 / 收起 / 更多⋮ / 最小化）：
+   默认完全隐去，鼠标放到「头部这一整条区域」（.block__icons）时才 4 个一起显形；
+   鼠标离开头部区域 → 一起隐去。
+   （老板：「鼠标放这一整块区域的时候，那 4 个功能一起展示，不是单个显示」）
+
+   ❗必须用 opacity，不能用 display:none：
+     若 display:none 元素不占命中区，hover 头部也触发不到子键。opacity:0 仍占位。
+
+   ❗用 .sy__file 锁死范围：
+     focus / collapse / more / min 这几个 data-type 在反链、大纲等面板也用同名键，
+     只锁文档树面板头，别误伤别的面板。 */
+.sy__file .block__icons .block__icon {
+    opacity: 0 !important;
+    transition: opacity 0.15s ease;
+}
+.sy__file .block__icons:hover .block__icon {
+    opacity: 1 !important;
+}
+
+/* 2.9 【0.2.39 加】表格宽度自适应编辑器（mist-enhancer「自适应编辑器宽」开关，html[data-mist-table-fit] 控制）
+   思源表格默认 display:inline-table，按内容撑宽、可超出编辑区被裁切（编辑区本身 overflow-x:clip）。
+   需求：表格宽度 ≤ 编辑区 —— 超出时按列比例缩到编辑区宽；内容少时仍保持窄、不拉伸。
+   ❗max-width:100% 只封顶不拉伸（小表格不会被拉满）；table-layout:fixed 让超宽时各列按比例缩，
+     而不是把内容挤溢出单元格。两个一起才满足「只窄不宽」。
+   ❗用 .protyle-wysiwyg 限定正文编辑区，.b3-typography 兜底导出/预览。 */
+html[data-mist-table-fit] .protyle-wysiwyg [data-node-id].table table,
+html[data-mist-table-fit] .protyle-wysiwyg .table table,
+html[data-mist-table-fit] .b3-typography .table table {
+    max-width: 100% !important;
+    table-layout: fixed;
+}
+/* 超宽表格的滚动容器（.table 的第一个 div，原生 overflow-x:auto）也不要超出编辑区 */
+html[data-mist-table-fit] .protyle-wysiwyg [data-node-id].table > div:first-child {
+    max-width: 100%;
+}
+
+/* 2.10 【0.2.39 加 · 2026-11-04 调】多级标题：字重 + 上方留白
+   思源标题默认 font-weight:600（半粗），H1–H6 共用同一条规则；且原生对标题块没有额外上边距，
+   标题与上方段落的间距和普通正文块一样，分段不够明显。
+   老板诉求：① 字重统一减细（反复微调后锁 530，比原生 600 细、仍比正文 400 重）；
+            ② 每个标题上方多留空白，让标题与上文拉开距离、阅读分段更分明。
+   做法：
+     - font-weight 读插件写入的 --mist-heading-weight（缺省 530），!important 盖过内核 {font-weight:600}；
+       这样字重在「薄雾设置 → 字体」里填数字即可实时调，不用改主题。
+     - margin-top:1.2em 给所有层级标题统一加上方留白（em 随标题字号，H1 自然更大、层级更分明）。
+       ⇒ 若想要「各级等距」而非按比例，把 1.2em 换成固定值如 18px 即可。
+   ❗只压 .protyle-wysiwyg 编辑区；选择器带 [data-node-id] 精确命中标题块，避免误伤别的 .hN 元素。 */
+.protyle-wysiwyg [data-node-id].h1,
+.protyle-wysiwyg [data-node-id].h2,
+.protyle-wysiwyg [data-node-id].h3,
+.protyle-wysiwyg [data-node-id].h4,
+.protyle-wysiwyg [data-node-id].h5,
+.protyle-wysiwyg [data-node-id].h6 {
+    font-weight: var(--mist-heading-weight, 530) !important;
+    margin-top: 1.2em !important;
+}
+
+/* 2.13 【0.2.39 加 · 2026-11-04】正文 / 目录 字重也交给插件变量
+   老板：「正文字重、目录文字字重也想能自己填数字看效果」→ 和 2.10 的标题字重一样，
+   不在主题里写死，改由 mist-enhancer 往 <html> 写 --mist-editor-weight / --mist-tree-weight，
+   主题只读变量，缺省取原生（400 = normal）。
+   ① 正文：压 .protyle-wysiwyg 下的内容块 [data-node-id]（段落/列表/引用…）。
+      ❗绝对不压标题：2.10 的选择器更精确（多一个 .hN 类），同一元素时特异性更高，
+        标题仍走 --mist-heading-weight，不被这里覆盖。
+      ❗加粗 **文字** 仍是 bold：strong/加粗 span 自带 font-weight 规则（或 inline style），
+        祖先的 !important 不会盖过「直接作用于该元素」的规则，所以加粗不丢。
+   ② 目录：压左侧文档树面板 .sy__file（含其下所有列表项文字）。 */
+.protyle-wysiwyg [data-node-id] {
+    font-weight: var(--mist-editor-weight, 400) !important;
+}
+.sy__file {
+    font-weight: var(--mist-tree-weight, 400) !important;
+}
+
 /* =====================================================================
    三、编辑区：白半透明；标签栏同色、无底边线
    ===================================================================== */
@@ -930,6 +1045,9 @@ body:has(#dockRight .dock__item--activefocus) .layout__dockr {
 .protyle-title__input {
     font-family: var(--mist-editor-font) !important;
     font-size: var(--mist-title-size) !important;
+    /* 文档标题字重也交给插件变量（--mist-title-weight，缺省 600 = 思源原生半粗档）。
+       与正文字重、多级标题字重同机制，可在「薄雾设置 → 字体 → 文档标题」里填数字实时调。 */
+    font-weight: var(--mist-title-weight, 600) !important;
 }
 
 .file-tree,
@@ -1295,4 +1413,136 @@ body:has(#dockRight .dock__item--activefocus) .layout__dockr {
 html:not([data-mist-plugin]) .mindmap-view__node--colored[style*="background-color"]:not([style*="background-color: transparent"]):not([style*="background-color:transparent"]):not([style*="rgba(0, 0, 0, 0)"]):not([style*="rgba(0,0,0,0)"]) {
     background-image: linear-gradient(var(--mist-map-veil), var(--mist-map-veil));
 }
+/* ---------------------------------------------------------------------
+   块标识（gutter）比正文淡 75%（0.2.39 新增）
+
+   思源把块标识画在 .protyle-gutters 里：块类型图标（文本块 / 标题 / 图片…）、
+   拖拽把手、折叠箭头，结构都是 <button><svg>。原生颜色见 base.css：
+       .protyle-gutters svg { color: var(--b3-theme-on-surface-light) }
+       .protyle-gutters button:hover svg { color: var(--b3-theme-on-surface) }
+
+   取正文色 --b3-theme-on-background，浓度只留 25% —— 也就是比正文淡 75%。
+   （上一版是 40%，老板反馈还重，收到 25%。）
+   用 color-mix 而不是 opacity，两个原因：
+     ① opacity 会连带压低 hover 的对比，还和原生的 color transition 打架；
+     ② color-mix 出来的仍然是个颜色，明暗两套自动跟着 --b3-theme-on-background
+        走，不用为暗色再抄一遍。
+   hover 提到 55%，是「平时不抢眼、真要拖动时还找得到」的折中。
+   想让它永远停在 25%，把两条 :hover 删掉即可。
+
+   文字型块标（"H3" 那种）不带 svg，靠 button 继承色，所以 button 那条不能省。
+   --------------------------------------------------------------------- */
+.protyle-gutters button {
+    color: color-mix(in srgb, var(--b3-theme-on-background) 25%, transparent);
+}
+
+.protyle-gutters button svg {
+    color: color-mix(in srgb, var(--b3-theme-on-background) 25%, transparent);
+}
+
+.protyle-gutters button:hover {
+    color: color-mix(in srgb, var(--b3-theme-on-background) 55%, transparent);
+}
+
+.protyle-gutters button:hover svg {
+    color: color-mix(in srgb, var(--b3-theme-on-background) 55%, transparent);
+}
+
+/* ---------------------------------------------------------------------
+   无序列表圆点：缩小 + 变淡（0.2.39 新增）
+
+   圆点的画法（base.css）：
+     .protyle-wysiwyg [data-node-id].li > .protyle-action {
+         width:34px; display:flex; justify-content:center; align-items:center;
+         color: var(--b3-theme-on-surface);      ← 圆点颜色在这里，不在 svg 上
+     }
+     .protyle-wysiwyg [data-node-id].li > .protyle-action svg {
+         width:34px; height:max(14px, 1em - 4px);   ← 圆点大小由 svg 高度决定
+     }
+   圆点本体是 svg 里的 symbol，按 preserveAspectRatio 居中缩放，所以：
+
+   ① 变小：用 transform: scale 而不是改 height。
+      svg 的 width 是 34px 的整条容器宽，直接压 height 会让 symbol 在
+      34×N 的框里重新适配、垂直位置飘；scale 只缩视觉、不改布局，
+      容器宽度不变 ⇒ 正文缩进一个字都不动。
+   ② 变淡：改 .protyle-action 的 color（圆点走 currentColor），
+      和块标识同一套算法，浓度 30%。
+
+   只动 [data-subtype=u]（无序）。有序列表的数字、任务列表的勾选框都不碰 ——
+   数字缩小会看不清，勾选框缩小会难点中。
+   hover 时原生会把 color 顶到 --b3-theme-on-background（全亮），
+   那是「指到这一项」的正常反馈，保留。
+   --------------------------------------------------------------------- */
+.protyle-wysiwyg [data-node-id].li[data-subtype="u"] > .protyle-action,
+.b3-typography .li[data-subtype="u"] > .protyle-action {
+    color: color-mix(in srgb, var(--b3-theme-on-background) 30%, transparent);
+}
+
+.protyle-wysiwyg [data-node-id].li[data-subtype="u"] > .protyle-action svg,
+.b3-typography .li[data-subtype="u"] > .protyle-action svg {
+    transform: scale(0.7);
+    transform-origin: center center;
+}
+
+/* 2.11 【0.2.39 加】列表符号（圆点/数字/复选框）与文字的间距收紧
+   原生结构（base.css）：
+     .protyle-action  position:absolute; left:0; width:34px; justify-content:center;（符号居中在 34px 盒里）
+     .li > [data-node-id]  margin-left:34px;（文字起点落在 34px）
+   ⇒ 符号右缘约在 26px（右对齐+8px 内距），文字起点 34px → 两者间约 8px 空隙，看着松。
+   老板：「待办/有序/无序 前面图标和文字距离太大，减少距离」。
+   做法（两步配合，缺一不可）：
+     ① .protyle-action 改右对齐（flex-end）+ 8px 内距 ⇒ 符号贴到 34px 盒的右缘（右缘≈26px）；
+     ② 文字 margin-left 从 34px 收到 28px，与符号右缘对齐 ⇒ 符号到文字只剩约 2px，几乎贴住。
+   ② 同时让每一层嵌套缩进从 34px 变 28px（更紧凑），但保留绝对定位的 .protyle-action，
+      所以符号不会与文字重叠、嵌套层级仍清晰可读。
+   作用于所有列表类型（o/u/t）及表格内列表（[data-table-cell-node]）。
+   ❗与上面 2.x 无序圆点规则不冲突：那段只动 color 与 svg scale（作用于 u），本段动对齐+缩进（作用于全部）。 */
+.protyle-wysiwyg [data-node-id].li > .protyle-action,
+.protyle-wysiwyg [data-table-cell-node].li > .protyle-action,
+.b3-typography .li > .protyle-action {
+    justify-content: flex-end !important;
+    padding-right: 8px !important;
+}
+.protyle-wysiwyg [data-node-id].li > [data-node-id],
+.protyle-wysiwyg [data-node-id].li > [data-table-cell-node],
+.protyle-wysiwyg [data-table-cell-node].li > [data-node-id],
+.protyle-wysiwyg [data-table-cell-node].li > [data-table-cell-node] {
+    margin-left: 28px !important;
+}
+
+/* 2.12 【已撤销 · 2026-11-04】文档信息栏恢复思源原生布局
+   原 0.2.39 的横向重排（图标+标签+按钮同行 / 上下对称 16px）已整段撤销，
+   现回退为原生：__ia 纵向堆叠（图标 -48px 上拉在上、标签、操作按钮在下），
+   标题间距由内核默认控制。若日后重做信息栏，从此处重新起段即可。 */
+
+/* ---------------------------------------------------------------------
+   列表项折行后的引导竖线（0.2.39 新增，去线）
+
+   原生在 base.css 里给每个列表项画了一条折行引导线：
+     .protyle-wysiwyg [data-node-id].li::before {
+         content:""; position:absolute;
+         border-left:.5px solid var(--b3-theme-background-light);
+         left:17px;
+         top:calc(1.625em + 12px); height:calc(100% - 1.625em - 12px);
+     }
+   起点是「1.625em + 12px」，高度又把首行扣掉 —— 所以它只在列表项折行、
+   第二行开始的地方露出来，看着像文字左边一段孤立的小竖线（截图里标的那个）。
+
+   薄雾的立场是线越少越好，和顶栏/侧栏/右栏去框是同一件事，这里关掉。
+   用 content:none 而不是 border-left:none —— 和原生 [fold="1"] 的写法一致，
+   伪元素整个不生成，省得留下一个 0 宽的空盒子。
+
+   两点副作用：
+     ① 嵌套子列表的层级引导线同源，会一起消失（缩进还在，层级照样看得懂）；
+     ② 原生 :hover 时把这条线换成 --b3-scroll-color 加深，一并失效。
+   想只去掉最外层、保留嵌套层级线，这条规则要改成 :not(:has(ul)) 之类的
+   绕法——那一版没做，因为薄雾本来就该是「线越少越好」。
+   --------------------------------------------------------------------- */
+.protyle-wysiwyg [data-node-id].li::before,
+.protyle-wysiwyg [data-table-cell-node].li::before,
+.table__cell-rich [data-node-id].li::before,
+.table__cell-rich [data-table-cell-node].li::before {
+    content: none !important;
+}
+
 }  /* end @media (hover: hover) and (pointer: fine) —— 桌面专属 */
