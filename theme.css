@@ -114,9 +114,14 @@ body,
 /* 0.2.27 修「未打开笔记时编辑区调不了透明度」：
    空状态 .layout__empty（搜索/最近文档/新建文档 那个欢迎页）被原生刷了
    实色白 rgb(255,255,255)，不引用 --mist-editor-bg → 拖「编辑区透明度」没反应。
-   改透明后它直接压在 body 的 --mist-editor-bg 上（同底），随滑块一起变。 */
+   0.2.27 当时的做法是整块 transparent，让 body 的底色透上来 —— **这个做法有副作用**：
+   欢迎页下面如果压着别的东西（最典型就是全局关系图），会直接透上来，六行菜单变成
+   浮在点线和连线上的文字。老板 2026-11-09 的截图就是这个现象，并判断「都被做成透明的了」。
+   现在改成「用 --mist-editor-bg 铺一层」：
+     · 透明度 100 时 = 纯白，和编辑区同色，下面压着的关系图看不见（等于思源原生观感）；
+     · 拖低透明度时跟着变，0.2.27 的诉求照样满足（它本来就该和编辑区一个亮度）。 */
 .layout__empty {
-    background: transparent !important;
+    background-color: var(--mist-editor-bg) !important;
 }
 
 body {
@@ -557,12 +562,53 @@ html[data-mist-table-fit] .protyle-wysiwyg [data-node-id].table > div:first-chil
         标题仍走 --mist-heading-weight，不被这里覆盖。
       ❗加粗 **文字** 仍是 bold：strong/加粗 span 自带 font-weight 规则（或 inline style），
         祖先的 !important 不会盖过「直接作用于该元素」的规则，所以加粗不丢。
-   ② 目录：压左侧文档树面板 .sy__file（含其下所有列表项文字）。 */
+   ② 目录：压左侧文档树面板 .sy__file（含其下所有列表项文字）。
+   ③ 表格正文单元格（2026-11-04 补）：原生 base.css 对 td 是**直接声明**
+        `.protyle-wysiwyg table tbody td{font-weight:normal}`
+      （th 同理 600）。直接声明永远赢过「从祖先继承」，所以只压表格块 [data-node-id]
+      时单元格仍卡在 400，滑块怎么拖都不动。⇒ 必须直接选到 td/th 才生效。
+      ❗表头 thead 保留原生 600（它是结构强调，不属于正文）；若哪天也想跟随，照下面写好加一组即可。
+      ❗单元格里 <strong>/加粗 span 仍是 bold，不受影响。 */
 .protyle-wysiwyg [data-node-id] {
+    font-weight: var(--mist-editor-weight, 400) !important;
+}
+.protyle-wysiwyg table tbody td,
+.protyle-wysiwyg table tbody th {
     font-weight: var(--mist-editor-weight, 400) !important;
 }
 .sy__file {
     font-weight: var(--mist-tree-weight, 400) !important;
+}
+
+/* 2.14 【0.2.39 加 · 2026-11-04】数据库（属性视图）跟随编辑区底色，消掉白块
+   现象：开了背景色 / 背景图后，数据库块里表头行、底部「加载更多」、左侧吸顶列、
+   滚动时吸顶的「表格/想读」标签条仍是死白，和周围编辑区颜色对不上。
+   根因：原生这几块不是靠继承，而是用 --b3-parent-background 刷不透明底色
+        （该变量由内核按文档底色**内联**注入，亮色下就是 #fff）：
+        .av__row--header,.av__row--footer{background-color:var(--b3-parent-background)}
+        .av__colsticky{background-color:var(--b3-parent-background)}
+        .av__views--fixed{background-color:var(--b3-parent-background)}
+   做法：
+     - 表头行 / 底栏：直接 transparent。它们不压滚动内容，透明后自然与编辑区同色。
+     - 左侧吸顶列 / 吸顶标签条：这两块会**盖住**滚动过来的内容，纯透明会「透字」，
+       所以补一层 backdrop-filter 磨砂（主题本就是玻璃/薄雾路线），既挡住字，又不出白块。
+     - 吸顶标签条原生的 `0 0 0 1px var(--b3-parent-background)` 白描边一并去掉，否则留一道白线。
+   ❗千千万万别用 var(--mist-editor-bg) 去填：那层半透明会叠在**已经铺好的**编辑区底色之上，
+     两层叠加反而更白（和 0.2.26 左侧栏那次同一个坑）。
+   ❗只作用于 .av（数据库）；经典表格的 [custom-pinthead] 吸顶表头用的是同一个变量但**必须保持不透明**，
+     否则纵向滚动时表头会透出下面的行，故不动它。 */
+.protyle-wysiwyg .av .av__row--header,
+.protyle-wysiwyg .av .av__row--footer {
+    background-color: transparent !important;
+}
+.protyle-wysiwyg .av .av__colsticky,
+.protyle-wysiwyg .av .av__views--fixed {
+    background-color: transparent !important;
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+}
+.protyle-wysiwyg .av .av__views--fixed {
+    box-shadow: 0 -1px inset var(--mist-line) !important;
 }
 
 /* =====================================================================
@@ -1057,6 +1103,31 @@ body:has(#dockRight .dock__item--activefocus) .layout__dockr {
     font-size: var(--mist-tree-size) !important;
 }
 
+/* 5.2 【0.2.40 加 · 2026-11-05】未打开笔记时的空白页，字体/字号/字重跟随文档树
+   现象：没开任何笔记时，中间那块（搜索 / 最近文档 / 数据历史 / 新建文档 / 新建笔记本 /
+   用户指南）比左侧文档树大一号，字形也不一样。
+   根因：原生直接声明 `.layout__empty .b3-list-item{font-size:17px}`，且**没写 font-family**
+   ⇒ 既不吃 --mist-tree-size，也不吃 --mist-tree-font，永远停在 17px + 系统默认字。
+   做法：直接选到那一层，把文档树用的三个变量原样搬过来（含字重，缺省 400）。
+   - 图标 .b3-list-item__graphic 原生 18px，改 1.15em（默认 14px → 16.1px，与文档树
+     的 16px 图标对齐）；字号调大调小时等比，不会主次失衡。
+   - 快捷键提示 __meta 原生 .75rem（写死 12px），改 .75em 跟随父级字号，
+     免得主文字缩到 14px 后它还停在 12px、显得偏大。
+   ❗变量为空时（--mist-tree-font 默认就是空串）该声明自动失效、回落到继承，
+     这一点与文档树规则完全一致，所以「不设字体」时两边表现也一致。 */
+.layout__empty .b3-list-item {
+    font-family: var(--mist-tree-font) !important;
+    font-size: var(--mist-tree-size) !important;
+    font-weight: var(--mist-tree-weight, 400) !important;
+}
+.layout__empty .b3-list-item__graphic {
+    width: 1.15em !important;
+    height: 1.15em !important;
+}
+.layout__empty .b3-list-item__meta {
+    font-size: .75em;
+}
+
 /* ===== 文档树图标：一律交回思源原生渲染 =====
    教训（0.2.12）：`.b3-list-item__icon` 不是一个纯装饰元素，它是思源的
    「换图标」按钮 —— 原生 JS 给它写 aria-label = languages.changeIcon，
@@ -1300,7 +1371,24 @@ body:has(#dockRight .dock__item--activefocus) .layout__dockr {
 }
 
 /* =====================================================================
-   七、柔和色板 + 导图蒙版（0.2.33）
+   七、柔和色板（0.2.33）
+
+   ❗导图配色已于 0.2.40（2026-11-09）全部撤除：老板反馈节点颜色闪烁，
+     决定恢复思源自带颜色。插件侧的逐节点改色已停产，这里的 45% 白蒙版
+     兜底也一并删掉 —— 留着它只会让「没装插件的人」看到一层糊掉的颜色，
+     反而比原色更难看。
+
+     2026-11-09 又完整试过一轮「静态 CSS 压淡」，全部撤销，结论留在这里：
+       · JS 逐节点改色（0.2.25~0.2.39）：内核 updateColors() 会反复重算并重写
+         inline backgroundColor，任何事后改色必被覆盖，必然有一帧原色 —— 必闪。
+       · filter: saturate(.62)：只降饱和不动明度，老板判「没什么变化，还是深」。
+       · saturate(.55) + brightness(1.25)：变浅了，但亮了以后色相更跳，
+         老板判「太艳了」。
+       · saturate(.32) + brightness(1.22)、saturate(.15) + brightness(1.06)：
+         老板仍判「还是艳，还有点刺眼」。
+       ⇒ 三轮都没调到位，老板拍板恢复思源原色。**导图节点配色今后不再由主题
+         或插件干预**，只保留下面 1202~1222 行对连线/关系线/概要线原生变量的
+         调整（那些是改源头，本来就不闪）。
 
    ❗问题（老板：「思源里的默认颜色都很丑，颜色太深」）：
      数据库单选/多选、正文「字体颜色/背景色」的色块都长这样 ——
@@ -1355,19 +1443,9 @@ body:has(#dockRight .dock__item--activefocus) .layout__dockr {
     --b3-font-background10: hsl(190, 58%, 94%);
     --b3-font-background11: hsl(165, 52%, 94%);
     --b3-font-background12: hsl(55, 65%, 94%);
-
-    /* 思维导图节点蒙版（2026-10-31 拍板 45%）。
-       节点颜色是 JS 写死的 inline background-color，CSS 改不了色相，
-       只能在它上面覆一层半透明色把它压淡。
-       用 background-image 而不是 box-shadow：导图的 hover / selected /
-       relation 三种状态全靠 inset box-shadow 画 1~2px 描边，一碰
-       box-shadow 就会把描边吃掉；而 JS 只写 backgroundColor，不写
-       background 简写，所以 background-image 这层是安全的。 */
-    --mist-map-veil: rgba(255, 255, 255, 0.45);
 }
 
-/* 暗色：底色压深、文字提亮，保证 chip 在深色卡上仍然分得清；
-   导图蒙版换成黑罩 —— 深色纸面上一片白罩会把彩色节点糊成灰白。 */
+/* 暗色：底色压深、文字提亮，保证 chip 在深色卡上仍然分得清。 */
 :root[data-theme-mode="dark"] {
     --b3-font-color1: hsl(0, 55%, 78%);
     --b3-font-color2: hsl(42, 60%, 78%);
@@ -1394,25 +1472,17 @@ body:has(#dockRight .dock__item--activefocus) .layout__dockr {
     --b3-font-background10: hsl(190, 28%, 23%);
     --b3-font-background11: hsl(165, 26%, 23%);
     --b3-font-background12: hsl(55, 28%, 23%);
-
-    --mist-map-veil: rgba(0, 0, 0, 0.30);
 }
 
-/* 导图节点蒙版本体（**兜底专用**）。
-   0.2.34 起导图配色由 mist-enhancer 插件接管（改成极简单色，见插件 0.2.24），
-   插件在时会打 html[data-mist-plugin]，这条规则自动让位 —— 否则插件刚上完色，
-   又被这里的 45% 蒙版压一遍，等于白干。
-   没装插件的人仍然拿这层蒙版兜底（主题不依赖插件也完整）。
+/* 导图节点蒙版已删除（0.2.40 · 2026-11-09）。
+   原规则是「没装插件时的兜底」：给所有带 inline 底色的节点盖一层 45% 白罩。
+   老板要求恢复思源原色，这层白罩会把彩色节点糊成一片灰白，比原色更难看，
+   所以连兜底一起撤掉。旧规则保留在这里仅作记录：
 
-   三条 :not 是准入条件，缺一不可：
-     ① --colored       ：JS 只在「节点有颜色」时才加这个类；
-     ② [style*="background-color"]：JS 给无色节点赋值空串时，inline style 里
-        根本不会出现这个属性 —— 必须要求属性真实存在，否则无色节点会被
-        罩成一块白斑；
-     ③ 排除显式透明 —— 避免 `background-color: transparent` 也被算作有颜色。 */
-html:not([data-mist-plugin]) .mindmap-view__node--colored[style*="background-color"]:not([style*="background-color: transparent"]):not([style*="background-color:transparent"]):not([style*="rgba(0, 0, 0, 0)"]):not([style*="rgba(0,0,0,0)"]) {
-    background-image: linear-gradient(var(--mist-map-veil), var(--mist-map-veil));
-}
+   html:not([data-mist-plugin]) .mindmap-view__node--colored[style*="background-color"]… {
+       background-image: linear-gradient(var(--mist-map-veil), var(--mist-map-veil));
+   }
+*/
 /* ---------------------------------------------------------------------
    块标识（gutter）比正文淡 75%（0.2.39 新增）
 
@@ -1461,10 +1531,8 @@ html:not([data-mist-plugin]) .mindmap-view__node--colored[style*="background-col
      }
    圆点本体是 svg 里的 symbol，按 preserveAspectRatio 居中缩放，所以：
 
-   ① 变小：用 transform: scale 而不是改 height。
-      svg 的 width 是 34px 的整条容器宽，直接压 height 会让 symbol 在
-      34×N 的框里重新适配、垂直位置飘；scale 只缩视觉、不改布局，
-      容器宽度不变 ⇒ 正文缩进一个字都不动。
+   ① 大小：0.2.39 用 transform:scale(.7) 缩；0.2.40 起改成**弃用 svg、用伪元素画点**
+      （5px 实心圆），原因见下面那段注释——用 svg 时圆点永远偏左、和数字对不齐。
    ② 变淡：改 .protyle-action 的 color（圆点走 currentColor），
       和块标识同一套算法，浓度 30%。
 
@@ -1478,30 +1546,55 @@ html:not([data-mist-plugin]) .mindmap-view__node--colored[style*="background-col
     color: color-mix(in srgb, var(--b3-theme-on-background) 30%, transparent);
 }
 
+/* 0.2.39 补丁（2026-11-04）：圆点不再用 svg，改用伪元素 —— 让「圆点 vs 数字」到文字的距离一致
+   原先的坑：#iconDot 的 viewBox 是 20×20，里面的圆只占 9/20（直径 4.5～14.5），
+   塞进 width:34px 的 svg 后按 xMidYMid 居中 ⇒ 圆心落在 34px 盒的 x=17，
+   再乘 0.7 缩放，视觉右缘只到 x≈11；而有序数字是 flex-end 贴到 26。
+   两者到文字（28px）的间距就变成「圆点 ~17px / 数字 2px」，看着完全不统一。
+   ⇒ 直接用伪元素画 5px 实心圆，作为 flex 子项跟着 flex-end 排，
+     和数字共用同一条右对齐轴，间距完全一致；颜色仍走 currentColor（30% 那条不变）。
+   ❗必须用 ::before，不能用 ::after —— 原生 `.li > .protyle-action::after`
+     是那个 18px 的 hover 圆底（absolute 居中），占了 ::after 位置。 */
 .protyle-wysiwyg [data-node-id].li[data-subtype="u"] > .protyle-action svg,
 .b3-typography .li[data-subtype="u"] > .protyle-action svg {
-    transform: scale(0.7);
-    transform-origin: center center;
+    display: none;
 }
 
-/* 2.11 【0.2.39 加】列表符号（圆点/数字/复选框）与文字的间距收紧
+.protyle-wysiwyg [data-node-id].li[data-subtype="u"] > .protyle-action::before,
+.b3-typography .li[data-subtype="u"] > .protyle-action::before {
+    content: "";
+    display: block;
+    flex: none;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background-color: currentColor;
+}
+
+/* 2.11 【0.2.39 加】列表符号（圆点/数字/复选框）与文字的间距
    原生结构（base.css）：
      .protyle-action  position:absolute; left:0; width:34px; justify-content:center;（符号居中在 34px 盒里）
      .li > [data-node-id]  margin-left:34px;（文字起点落在 34px）
-   ⇒ 符号右缘约在 26px（右对齐+8px 内距），文字起点 34px → 两者间约 8px 空隙，看着松。
-   老板：「待办/有序/无序 前面图标和文字距离太大，减少距离」。
-   做法（两步配合，缺一不可）：
-     ① .protyle-action 改右对齐（flex-end）+ 8px 内距 ⇒ 符号贴到 34px 盒的右缘（右缘≈26px）；
-     ② 文字 margin-left 从 34px 收到 28px，与符号右缘对齐 ⇒ 符号到文字只剩约 2px，几乎贴住。
-   ② 同时让每一层嵌套缩进从 34px 变 28px（更紧凑），但保留绝对定位的 .protyle-action，
-      所以符号不会与文字重叠、嵌套层级仍清晰可读。
-   作用于所有列表类型（o/u/t）及表格内列表（[data-table-cell-node]）。
-   ❗与上面 2.x 无序圆点规则不冲突：那段只动 color 与 svg scale（作用于 u），本段动对齐+缩进（作用于全部）。 */
+   ⇒ 符号居中 ⇒ 符号右缘离文字比较远，看着松。
+   老板：「待办/有序/无序 前面图标和文字距离太大」→ 缩小；后又说「数字贴到文字上了，
+   要有序列表像之前无序那样留出距离」→ 现在统一留 8px。
+
+   ❗❗ 0.2.39 的坑（务必记住）：.protyle-action 原生只写 width:34px，**没有 box-sizing**，
+   思源也没有全局 `*{box-sizing:border-box}` 兜底 ⇒ 它默认 content-box。
+   所以在这里写 padding-right 会加在 34px 的**外面**，符号右缘被顶到 34px，
+   而文字从 28px 起 ⇒ 数字直接压在文字上（截图「1选人群推广」就是这么来的）。
+   ⇒ 必须先 box-sizing:border-box，padding 才向内吃。
+
+   现在这套数值：
+     盒宽 34 - padding-right 14 = 内容区 20px ⇒ 符号右缘 20px；
+     文字 margin-left 28px ⇒ 符号到文字 8px，有序/无序/待办三种完全一致。
+   padding 8→14 只是把符号往左挪，文字缩进一个字都没动，嵌套层级仍按 28px 递进。 */
 .protyle-wysiwyg [data-node-id].li > .protyle-action,
 .protyle-wysiwyg [data-table-cell-node].li > .protyle-action,
 .b3-typography .li > .protyle-action {
+    box-sizing: border-box !important;
     justify-content: flex-end !important;
-    padding-right: 8px !important;
+    padding-right: 14px !important;
 }
 .protyle-wysiwyg [data-node-id].li > [data-node-id],
 .protyle-wysiwyg [data-node-id].li > [data-table-cell-node],
@@ -1546,3 +1639,154 @@ html:not([data-mist-plugin]) .mindmap-view__node--colored[style*="background-col
 }
 
 }  /* end @media (hover: hover) and (pointer: fine) —— 桌面专属 */
+
+/* 0.2.40 一度加过「界面密度」段落（把设置面板与弹出菜单整体缩小），
+   老板看过之后要恢复思源原生尺寸与字号，已整段移除，不留任何覆盖。 */
+
+/* =====================================================================
+   关系图（全局关系图）：保持思源原生，不做任何覆盖
+   ---------------------------------------------------------------------
+   老板 2026-11-09 明确要求「全局关系图直接用思源默认的，不要去改」。
+   之前加过两版（① 画布垫 #fafbfc；② 再把顶栏刷成同色、去掉分割线），
+   都被判「上面还是有问题」，整段已删除，不留任何 .graph / #toolbar 覆盖。
+
+   留下的三条事实，免得以后又走一遍：
+     1) 关系图容器类名是 .graph（原生 base.css 里只出现一次），画布是 .graph__svg
+        + 两个 canvas，节点/连线由前端 WebGL 绘制，主题只能改容器底色。
+     2) 关系图没有自己的不透明底：它落在 #layouts 里，而 #layouts 自 0.2.26 起是
+        transparent（为修左停靠栏竖缝）。所以它的底色 = body 的 --mist-editor-bg
+        ＋ --mist-bg-image（插件背景场景）。想让它变，改的是背景场景，不是加规则。
+     3) 关系图窗口中顶栏就是 #toolbar（--mist-top-bg，纯白），画布透出 body 的白，
+        两者本来一致 —— 这就是思源原生的观感，别再去「统一」它。
+   ===================================================================== */
+
+/* =====================================================================
+   ~~关系图窗口：把下层的欢迎页整个藏掉（0.2.41 · 2026-11-09）~~
+   —— 2026-11-09 14:13 / 0.2.47 已删除，原因值得记牢：
+
+   ❗`body:has(.graph, .sy__graph, .graph__svg) .layout__empty{display:none}`
+     用「DOM 里存在」当判据是错的：关系图关掉后元素可能仍留在 DOM 里，
+     判定永远成立 ⇒ 欢迎页永久消失，而且跟顶栏那条 :has 属同一类事故
+     （老板现场就是被那条 :has 把顶栏搞成透明的）。
+   ❗现在不需要它了：关系图在 0.2.46 起自带实色底（见下一段），
+     上层不透明，下层的欢迎页根本透不出来 —— 病灶在「上层没底」，
+     补的是上层，不是拿掉下层。
+   ===================================================================== */
+
+/* =====================================================================
+   独立窗口顶栏（#toolbar）：整条不透明 + 补层级（0.2.42 · 2026-11-09）
+   ---------------------------------------------------------------------
+   现象：文档窗口（全局关系图）顶栏里，标题左边多出一个「b」一样的残缺字形，
+   「全局关系图」几个字看着像被描了两遍，老板描述为「顶栏会漏出下面的文字」。
+
+   ❗关键判断：更早一版给顶栏左侧开了 34px 透明区（想让图标栏透上来），
+     那等于在顶栏上**凿了个洞**，任何压在下面的东西都会从这个洞露出来 ——
+     包括下层重复渲染的标题。这一版把洞堵死：整条实色，不留透明区。
+
+   ❗另一半原因在层叠顺序：原生 #toolbar **既没有 position 也没有 z-index**，
+     它是普通的静态块，DOM 里排在后面的兄弟（布局容器）只要带 position，
+     就会**盖在它上面**。原生之所以看不出问题，是因为原生顶栏没有背景，
+     被盖住也只是「文字叠文字」，恰好两个标题位置接近，看着像一个。
+     薄雾给了白底之后，后面那个标题反而成了白底上的一行游离文字。
+     所以这里补 z-index，让顶栏重新压到布局之上。
+   ❗**只补层级，不动 position**：原生在 `body--toolbar-hide` 下已经把
+     .toolbar 设成 position:absolute;width:100%，改成 relative 会把它拉回
+     文档流，布局直接塌。
+
+   为什么不是「把下面的标题找出来删掉」：
+     那个标题是内核渲染的（`#drag` 的 .toolbar__title-content / 下层同名文本），
+     主题没法判断它是「重复」还是「本来就该在」。压层级是唯一不会误伤的解法。
+
+   图标栏那一段不用特殊处理：思源给 #dockLeft 加了 margin-top = 顶栏高度，
+   它本来就从顶栏下沿开始，实色顶栏不会盖住它。
+   ===================================================================== */
+/* ❗判据必须用原生自己的：窗口模式下 body 带 `body--toolbar-hide`
+   （base.css 里就是它把 .toolbar 设成 position:absolute;width:100%）。
+   上一版写的 `body--window` 在思源前端 JS 里根本找不到 —— 一条都没命中，
+   这才是「改了好几轮、重启也没变化」的真正原因。这里三个判据并列冗余，
+   只要有一个成立就压上去。 */
+body.body--toolbar-hide #toolbar,
+body.body--window #toolbar,
+#toolbar {
+    /* ❗层级的唯一要求：**必须小于 8**。
+       原生 base.css：`.fullscreen{position:fixed;…;z-index:8}` —— 关系图、全局关系图、
+       思维导图全屏、AI 对话全屏全都在这一层里，它们**自己的工具条**（例如
+       `.mindmap-view__toolbar{z-index:5}`、关系图那行 `.block__icons`）都是这一层的子元素，
+       层级只在这一层内部比较。所以顶栏一旦高过 8，整层全屏内容（含它自己的按钮行）
+       就被顶栏整块盖住 —— 老板 2026-11-09 反馈「思维导图全屏右上角的设置没了」
+       就是这么来的（0.2.42~0.2.47 一直写的 60）。
+
+       那为什么还要给顶栏层级？为了压掉下层重复渲染的标题（「重影」）。下层布局容器
+       是 z-index:auto，**任何正整数都能压住它**。所以取 7：既压得住布局，
+       又稳稳待在 8 的原生全屏层之下。原生自己那些 6（.layout__resize）、
+       100（.layout-tab-container__drag）不受影响。 */
+    z-index: 7 !important;
+    background-color: var(--mist-top-bg) !important;
+    border-bottom: 1px solid var(--mist-line) !important;
+}
+
+/* =====================================================================
+   关系图 / 全局关系图：只在这一块还原思源原生（0.2.46 · 2026-11-09）
+   ---------------------------------------------------------------------
+   老板：「用思源原生的，不要改，不要改……只改全局关系图和关系图。」
+
+   ❗为什么必须单独处理，不能靠「全局都别动」：
+     原生给关系图的写法是（base.css 原文）
+       .fullscreen.sy__graph,.fullscreen.sy__agentChat,.fullscreen.sy__globalGraph
+         { background-color: var(--b3-theme-background) }
+     而薄雾**亮色模式下根本没定义 --b3-theme-background**（只有暗色那一块写了
+     #1e1e1e）⇒ var() 无值、且没写 fallback ⇒ 该声明在计算期失效 ⇒
+     background-color 回到 initial = transparent。于是关系图变成一层透明纱，
+     把下面打开着的文档（callout、正文）全透出来 —— 老板截图里那些浮在
+     连线上的字就是这么来的。**这不是「关系图本来就透明」，是变量缺了一块。**
+
+   ❗顶栏同理：0.2.42 给 #toolbar 补了 z-index:60（普通窗口用来压掉重影），
+     但关系图是 .fullscreen（原生 z-index:8），被 60 压住之后，
+     关系图自己的那行「关系图 N + 搜索/刷新/全屏/更多」就看不见了，
+     只剩窗口顶栏 —— 老板说的「顶栏也没有了」。
+
+   ❗❗0.2.46 踩的坑（老板 14:13 反馈「打开就把我的顶栏颜色改了，换预设也改不回去」）：
+     上一版的做法是 `body:has(.fullscreen.sy__globalGraph) #toolbar
+     { z-index:auto; background:transparent }` —— **两处错**：
+       1) `:has()` 只认 DOM 存在，不认可见性。关系图的 .fullscreen 元素关掉后
+          仍可能留在 DOM 里 ⇒ 条件一直成立 ⇒ 顶栏**永久透明**；
+       2) 透明只是「不画自己的底」，底下露出来的是 Electron 的原生标题栏
+          （Windows 主题色，浅蓝）—— 所以顶栏变成蓝色，且与预设配色无关，
+          换预设当然改不回去。
+     ⇒ **绝不要用「把顶栏刷透明」来给别的东西让位。** 正确做法是把需要盖住
+        顶栏的那个东西**抬高层级**：给关系图的 .fullscreen 抬到 70（> 60），
+        它自带实色底，天然盖住顶栏；顶栏自己保持薄雾原样（白底 + z-index:60），
+        关系图关掉之后一切自动恢复，不需要任何 :has 判定。
+
+   ❗底色用 --mist-editor-bg 而不是硬写 #fff：
+     它由 settings.js 写到 <html> 上（亮 #ffffff / 暗 #1e2024，
+     编辑区透明度拉到 90% 以下时变 rgba），跟编辑区严格同色同透明度，
+     和原生「关系图 = --b3-theme-background」的语义一致，也照顾了暗色。
+   ===================================================================== */
+.fullscreen.sy__globalGraph,
+.fullscreen.sy__graph,
+.sy__globalGraph,
+.sy__graph {
+    /* 带 fallback：#fff —— 万一 settings.js 没跑起来（--mist-editor-bg 未写入），
+       也必须是实色，绝不能再退回「透明纱」那个坑。 */
+    background-color: var(--mist-editor-bg, #ffffff) !important;
+}
+
+/* 层级不用再单独处理（0.3.0 起）：
+   以前这里把关系图的 .fullscreen 抬到 70 去盖顶栏的 60，那是「两个数比大小」的补丁。
+   现在顶栏固定在 7（< 原生全屏层的 8），原生 .fullscreen 的 8 天然在上面 ——
+   关系图、全局关系图、思维导图全屏、AI 对话全屏全都自动正确，一条例外都不用写。
+   别再把顶栏改回 60，否则思维导图/关系图全屏右上角那排按钮又会整块消失。 */
+
+:root[data-theme-mode="dark"] body.body--toolbar-hide #toolbar,
+:root[data-theme-mode="dark"] body.body--window #toolbar,
+:root[data-theme-mode="dark"] #toolbar {
+    border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* 顶栏标题图标：原生 `body--toolbar-hide .toolbar #drag .toolbar__title-icon`
+   会藏掉它。这里保持一致，避免标题左边多挂一个图标和文字挤在一起。 */
+body.body--toolbar-hide #toolbar #drag .toolbar__title-icon,
+body.body--window #toolbar #drag .toolbar__title-icon {
+    display: none !important;
+}
