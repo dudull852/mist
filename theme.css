@@ -246,6 +246,31 @@ body {
     touch-action: none !important;
 }
 
+/* 2.2b 【0.2.51】修「目录栏底部一条白带」（用户 2026-11-16 报：底部多一块白色色块）
+   现象：文档树面板的底色（#f2f5f8）到离窗口底边 4px 处就断了，
+        底下露出 4px 纯白，看起来像底部多了一个白色方块。
+
+   根因（实测 CDP 取到内联样式）：
+     思源布局代码给 #layouts 的顶行（div.fn__flex-1）写了内联
+        style="margin-bottom: var(--b3-layout-space);"   ← 4px
+     这 4px 本来是留给「编辑区与底部面板之间的横向拖拽条」的。
+     但底部面板处于浮动/关闭状态时，那条拖拽条被思源标成 fn__none（display:none），
+     于是**没人抵消这 4px** → 顶行底部空出 4px → 露出 body 底色（白）。
+     编辑区也是白的，所以只有目录栏那一侧看得出来。
+
+   为什么不能靠给 .layout__dockl 加负外边距来盖住：
+     顶行是 overflow:auto，列超出行盒的部分会被裁掉（或长出滚动条），
+     负 margin 方案会让目录列出现滚动条，不可用。
+
+   做法：拖拽条不可见时（被 display:none，或根本不在 DOM 里），
+        把顶行那条内联 margin-bottom 直接归零，行的高度自然补上这 4px，
+        目录列随行一起撑到窗口底部，白带消失。
+        拖拽条可见时（底部面板展开）保持原样 —— 那 4px 仍是面板之间的留白。
+   ⚠️ 内联样式的优先级高于普通规则，这里必须写 !important 才能压掉。 */
+#layouts > div:first-child:not(:has(+ .layout__resize:not(.fn__none))) {
+    margin-bottom: 0 !important;
+}
+
 /* 2.3 交界处不留任何「线」：面板内层若自带 border-right / 内阴影也一并清掉
        （防止视觉上的竖线不是拖拽条画出来的，而是某一层容器的边框）
        注意：2.4 的分割线必须写在**本节之后** —— 同样是 .layout__dockl 的
@@ -609,6 +634,34 @@ html[data-mist-table-fit] .protyle-wysiwyg [data-node-id].table > div:first-chil
 }
 .protyle-wysiwyg .av .av__views--fixed {
     box-shadow: 0 -1px inset var(--mist-line) !important;
+}
+
+/* 2.15 【0.2.50 加 · 2026-11-10】数据库单元格文字「一深一浅」→ 把富文本格子拉回格子字号
+   现象：同一个数据库表格里，有的格子字大一号、看着更重（深），有的格子字小一号（浅），
+        并排就是「对比度有的深有的浅」。
+   真机实测（CDP getComputedStyle，同一张表的相邻两格）：
+     · 纯文本格 → .av__celltext（无额外类）        13.125px / 字重 340
+     · 富文本格 → .av__celltext--rich b3-typography 15px / 字重 400
+   颜色两边其实**完全相同**（都是 --b3-theme-on-background），所以不是配色问题，
+   是字号和字重被顶掉了。根因在本主题第五节：
+
+       .protyle-wysiwyg, .protyle-wysiwyg .p, .b3-typography {
+           font-size: var(--mist-editor-size) !important;   ← 罪魁
+       }
+
+   那条是为了让「导出 / 预览页」跟随正文字号的，但数据库富文本格子里也带
+   `b3-typography` 类 ⇒ 被强行拉成正文 15px，原生给格子的 .875em（15 × 0.875
+   = 13.125px）被 !important 顶掉；字重同时从 340 掉回 400，笔画更粗，看着更深。
+   做法：把数据库里的富文本格子按「继承父级」还给 .av__cell，
+        字号/字重就和纯文本格子一模一样（13.125px / 340），不再两套字。
+   为什么能压住第五节：都用 !important 时比特异性——
+        .protyle-wysiwyg .av .av__celltext--rich（3 个类）> .b3-typography（1 个类），
+        与书写先后无关。
+   ❗只选容器本身，**不要加 `*` 通配**：格子里的 **加粗** / 标题 / 行内字号
+     都是子元素自己的规则，跟着一起 inherit 会把富文本格式全抹平。 */
+.protyle-wysiwyg .av .av__celltext--rich {
+    font-size: inherit !important;
+    font-weight: inherit !important;
 }
 
 /* =====================================================================
