@@ -1077,8 +1077,12 @@ body:has(#dockRight .dock__item--activefocus) .layout__dockr {
     box-shadow: none !important;
 }
 
-/* 4.4 底部状态栏 → 去掉整条横条，改成右下角悬浮小胶囊
-   （做法同 QYL：把 #status 变成 fixed 定位的胶囊，不再占满一行、不再有上边框） */
+/* 4.4 底部状态栏 → 右下角悬浮小胶囊（保留文档统计的可见性）
+   2026-11-17：原版 opacity:0.6 + height:26px + overflow:hidden 把统计挤没了。
+   放宽到 30px、默认 0.92 不透明，并显式让 .status__counter 显示、取正常文字色。
+   2026-11-17 二次修：思源原生 .status--floating 会给 #status 设 visibility:hidden +
+   pointer-events:none（浮动状态栏平时隐藏、鼠标移到底部才浮现），叠加胶囊后
+   变成「看不见也点不到，右键弹不出状态项菜单」。这里强制常显 + 可点。 */
 #status,
 #status.status {
     position: fixed !important;
@@ -1088,21 +1092,23 @@ body:has(#dockRight .dock__item--activefocus) .layout__dockr {
     top: auto !important;
     width: auto !important;
     min-width: 0 !important;
-    height: 26px !important;
-    line-height: 26px !important;
+    height: 30px !important;
+    line-height: 30px !important;
     padding: 0 12px !important;
     margin: 0 !important;
     display: flex !important;
     align-items: center !important;
-    gap: 6px !important;
+    gap: 8px !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
     background: var(--mist-status-bg) !important;
     backdrop-filter: blur(14px) saturate(170%) !important;
     -webkit-backdrop-filter: blur(14px) saturate(170%) !important;
     border: 1px solid var(--mist-status-line) !important;
-    border-radius: 13px !important;
+    border-radius: 15px !important;
     box-shadow: 0 4px 16px var(--mist-status-shadow) !important;
     z-index: 50 !important;
-    opacity: 0.6 !important;
+    opacity: 0.92 !important;
     transition: opacity 0.2s ease, box-shadow 0.2s ease !important;
     overflow: hidden !important;
 }
@@ -1120,6 +1126,15 @@ body:has(#dockRight .dock__item--activefocus) .layout__dockr {
     box-shadow: none !important;
     background: transparent !important;
     font-size: 12px !important;
+}
+/* 文档统计：原生靠继承取色，胶囊毛玻璃底会把它吃掉，这里显式上色。
+   2026-11-18：不要在这里写 display:flex !important —— 它是 ID+类 特异度，
+   会压过思源原生的 `.status>[data-entry-hidden=true]{display:none!important}`，
+   导致右键关掉「文档统计」后统计仍赖着不走。显隐交给原生，只管上色。
+   若某版本原生 counter 不是 flex，再单独补 display（但不带 !important）。 */
+#status .status__counter {
+    color: var(--b3-theme-on-surface) !important;
+    white-space: nowrap !important;
 }
 /* 底部空出来的那块不再有分隔线 */
 .layout__dockb::after,
